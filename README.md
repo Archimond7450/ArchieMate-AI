@@ -70,12 +70,11 @@ sbt backend/test
 # Frontend Scala tests
 sbt frontend/test
 
-# Frontend unit tests
+# Frontend unit tests (Vitest)
 cd frontend-test
-npm install
-npm run test
+npm run test:unit
 
-# E2E tests
+# E2E tests (requires Docker container running)
 npm run test:e2e
 ```
 
