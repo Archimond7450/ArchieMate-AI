@@ -31,7 +31,9 @@ object Footer {
     heart.className = "text-red-500"
     heart.textContent = "\u2764\uFE0F"
     madeWith.appendChild(heart)
-    madeWith.appendChild(dom.document.createTextNode("Made with ❤️ using Scala 3.6.4, Circe 0.14.14, Scala.js 1.18.2, Laminar 17.2.1 & Tailwind 3.4.17"))
+    madeWith.appendChild(dom.document.createTextNode(
+      "Made with ❤️ using Scala 3.6.4, Circe 0.14.14, Scala.js 1.18.2, Laminar 17.2.1 & Tailwind 3.4.17"
+    ))
 
     // Copyright section
     val copyright = createEl("div")
@@ -47,7 +49,7 @@ object Footer {
     // Version section
     val version = createEl("div")
     version.className = "text-gray-500 dark:text-gray-500"
-    version.textContent = "Version "
+    version.textContent = "Version " + VersionInfo.version + " built at " + VersionInfo.builtAt
 
     row.appendChild(madeWith)
     row.appendChild(copyright)

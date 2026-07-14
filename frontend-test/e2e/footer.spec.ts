@@ -54,6 +54,7 @@ test.describe('Footer', () => {
     await page.goto('/');
     const footer = page.locator('footer');
     await expect(footer).toContainText('Version');
+    await expect(footer).toContainText('built at');
   });
 
   test('footer contains Twitch link', async ({ page }) => {
@@ -88,5 +89,6 @@ test.describe('Footer', () => {
     expect(footerText).toContain('Made with');
     expect(footerText).toContain('Archimond7450');
     expect(footerText).toContain('Version');
+    expect(footerText).toContain('built at');
   });
 });
