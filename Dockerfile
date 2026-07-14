@@ -17,24 +17,18 @@ RUN sbt update
 # Copy source
 COPY backend/ backend/
 COPY shared/ shared/
-
-# Build backend
-RUN sbt backend/package
-
-# ==================== Frontend build stage ====================
-FROM node:20-alpine AS frontend-build
-
-WORKDIR /app
-
-# Copy frontend build files
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci
-
-# Copy frontend source
 COPY frontend/ frontend/
 
-# Build frontend
-RUN npm run build
+# Compile Scala.js
+RUN sbt frontend/fullOptJS
+
+# Copy the compiled Scala.js output to backend's public resources
+RUN mkdir -p /app/backend/src/main/resources/public && \
+    cp frontend/target/scala-3.6.4/archiemate-frontend-opt.js /app/backend/src/main/resources/public/ && \
+    cp frontend/index.html /app/backend/src/main/resources/public/
+
+# Build backend (fat jar) with static frontend included
+RUN sbt clean backend/assembly
 
 # ==================== Runtime stage ====================
 FROM eclipse-temurin:21-jre
@@ -45,10 +39,7 @@ RUN groupadd -r archiemate && useradd -r -g archiemate archiemate
 WORKDIR /app
 
 # Copy built artifacts
-COPY --from=build /app/backend/target/scala-3.*/archiemate-backend_3-*.jar /app/archiemate.jar
-
-# Copy built frontend
-COPY --from=frontend-build /app/dist /app/dist
+COPY --from=build /app/backend/target/scala-3.6.4/archiemate-backend-assembly-*.jar /app/archiemate.jar
 
 # Copy configuration
 COPY backend/src/main/resources/application.conf /app/conf/application.conf
@@ -68,5 +59,4 @@ ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
     "-XX:MaxRAMPercentage=75.0", \
     "-Djava.security.egd=file:/dev/./urandom", \
-    "-Dconfig.file=/app/conf/application.conf", \
     "-jar", "/app/archiemate.jar"]

@@ -24,6 +24,13 @@ class ApiRoutes(config: AppConfig) {
           }
         }
       }
+    } ~
+    // Serve static frontend files
+    pathEndOrSingleSlash {
+      getFromResource("public/index.html")
+    } ~
+    pathPrefix("static") {
+      getFromResourceDirectory("public")
     }
   }
 }

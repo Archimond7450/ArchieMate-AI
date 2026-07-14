@@ -1,6 +1,6 @@
 package com.archimond7450.archiemate.settings
 
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigResolveOptions}
 
 case class ServerConfig(
     host: String,
@@ -21,9 +21,11 @@ case class AppConfig(
 )
 
 object AppConfig {
-  def apply(config: com.typesafe.config.Config): AppConfig = {
-    val serverConf = config.getConfig("archiemate.server")
-    val dbConf = config.getConfig("archiemate.database")
+  def apply(config: Config): AppConfig = {
+    // Resolve environment variable substitutions
+    val resolved = config.resolve(ConfigResolveOptions.defaults())
+    val serverConf = resolved.getConfig("archiemate.server")
+    val dbConf = resolved.getConfig("archiemate.database")
 
     AppConfig(
       server = ServerConfig(
@@ -44,7 +46,7 @@ object AppConfig {
     value.trim.startsWith("${") && value.trim.endsWith("}")
   }
 
-  private def resolveString(conf: com.typesafe.config.Config, key: String, default: String): String = {
+  private def resolveString(conf: Config, key: String, default: String): String = {
     val envKey = key.toUpperCase.replace("-", "_")
     sys.env.get(envKey).filter(_.nonEmpty).getOrElse {
       if (conf.hasPathOrNull(key)) {
@@ -56,7 +58,7 @@ object AppConfig {
     }
   }
 
-  private def resolveInt(conf: com.typesafe.config.Config, key: String, default: Int): Int = {
+  private def resolveInt(conf: Config, key: String, default: Int): Int = {
     val envKey = key.toUpperCase.replace("-", "_")
     sys.env.get(envKey).filter(_.nonEmpty).map(_.toInt).getOrElse {
       if (conf.hasPathOrNull(key)) {

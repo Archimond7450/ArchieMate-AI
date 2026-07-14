@@ -18,7 +18,7 @@ ArchieMate/
 ├── frontend/         # Scala.js frontend (Laminar, Tailwind)
 ├── frontend-test/    # E2E tests (Playwright) and unit tests (Vitest)
 ├── shared/           # Shared types and utilities
-├── docker/           # Dockerfile and docker-compose
+├── docker-compose.yml  # Docker Compose for local dev
 ├── build.sbt         # SBT multi-project build
 └── project/          # SBT plugins and configuration
 ```
@@ -82,7 +82,7 @@ npm run test:e2e
 ### 5. Docker
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
+docker compose up -d
 ```
 
 ## API Endpoints

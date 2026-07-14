@@ -25,9 +25,16 @@ lazy val commonJvmSettings = Seq(
 // ==================== Backend ====================
 lazy val backend = project
   .in(file("backend"))
+  .enablePlugins(AssemblyPlugin)
   .settings(commonJvmSettings)
   .settings(
     name := "archiemate-backend",
+    assembly / mainClass := Some("com.archimond7450.archiemate.ArchieMateApp"),
+    assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", xs@_*) => MergeStrategy.discard
+      case "reference.conf" => MergeStrategy.concat
+      case x => MergeStrategy.first
+    },
     libraryDependencies ++= Seq(
       // Pekko - all at same version
       "org.apache.pekko" %% "pekko-actor" % "1.1.5",

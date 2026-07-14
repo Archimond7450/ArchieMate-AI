@@ -1,8 +1,8 @@
 services:
   archiemate:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     environment:

@@ -4,7 +4,7 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.{ActorSystem, SupervisorStrategy}
 import com.archimond7450.archiemate.api.ApiRoutes
 import com.archimond7450.archiemate.settings.AppConfig
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.duration._
@@ -18,16 +18,22 @@ object ArchieMateApp {
   def main(args: Array[String]): Unit = {
     implicit val ec: ExecutionContext = scala.concurrent.ExecutionContext.global
 
-    // Get classic actor system for Pekko HTTP
-    implicit val classicSystem: org.apache.pekko.actor.ActorSystem =
-      org.apache.pekko.actor.ActorSystem("archiemate-classic")
+    // Load config: Pekko's reference.conf (from classpath) merged with our application.conf
+    val config: Config = ConfigFactory.load()
+    val appConfig = AppConfig(config)
+
+    // Create classic actor system for Pekko HTTP
+    import org.apache.pekko.actor.ClassicActorSystemProvider
+    implicit val classicSystem: ClassicActorSystemProvider =
+      new ClassicActorSystemProvider {
+        def classicSystem: org.apache.pekko.actor.ActorSystem =
+          org.apache.pekko.actor.ActorSystem("archiemate-classic", config)
+      }
 
     // Create typed actor system
-    val rootBehavior = Behaviors.supervise(Behaviors.empty[Nothing]).onFailure(SupervisorStrategy.restart)
+    val rootBehavior = Behaviors.supervise(Behaviors.empty[Nothing])
+      .onFailure(SupervisorStrategy.restart)
     val system: ActorSystem[Nothing] = ActorSystem(rootBehavior, "archiemate-system")
-
-    val config = ConfigFactory.load()
-    val appConfig = AppConfig(config)
 
     logger.info("ArchieMate starting on port {}", appConfig.server.port)
 
@@ -50,9 +56,12 @@ object ArchieMateApp {
     Runtime.getRuntime.addShutdownHook(new Thread(() => {
       logger.info("ArchieMate shutting down...")
 
-      // Unbind the HTTP server
+      import org.apache.pekko.actor.typed.scaladsl.adapter._
+      import scala.concurrent.Future
       import scala.concurrent.Await
       import scala.concurrent.duration._
+
+      // Unbind the HTTP server
       val unbindFuture = httpBindingFuture.map(_.unbind())
       Await.result(unbindFuture, 30.seconds)
       logger.info("HTTP server unbound")
@@ -60,8 +69,8 @@ object ArchieMateApp {
       // Terminate the actor systems
       system.terminate()
       Await.result(system.whenTerminated, 30.seconds)
-      classicSystem.terminate()
-      Await.result(classicSystem.whenTerminated, 30.seconds)
+      classicSystem.classicSystem.terminate()
+      Await.result(classicSystem.classicSystem.whenTerminated, 30.seconds)
 
       logger.info("ArchieMate shut down complete")
     }))

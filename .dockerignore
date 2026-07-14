@@ -21,12 +21,22 @@ frontend/node_modules/
 frontend/dist/
 frontend-test/node_modules/
 
-# sbt
-*.sbt
-project/build.properties
+# sbt cache (not build.sbt itself)
+*.sbt.lock
+project/project/target/
+project/target/
 
 # Logs
 *.log
 
-# Docker
-docker/
+# Environment
+.env
+.env.local
+
+# Coverage
+coverage/
+.coverage
+lcov.info
+
+# Node
+frontend-test/node_modules/
