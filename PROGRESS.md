@@ -45,6 +45,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] Production Dockerfile (multi-stage build)
 - [x] Docker Compose with PostgreSQL
 - [x] .dockerignore and .gitignore
+- [x] logback.xml configuration (STDOUT output)
 - [x] Initialize git repository
 - [x] Create sbt multi-project build (backend, frontend, shared, frontend-test)
 - [x] Configure Scala 3.6.4, Pekko 1.1.3, Circe 0.14.14

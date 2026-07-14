@@ -20,9 +20,9 @@ COPY shared/ shared/
 COPY frontend/ frontend/
 
 # Compile Scala.js and build backend (universal zip)
-RUN sbt frontend/fullOptJS \
+RUN sbt frontend/fastOptJS \
     && mkdir -p /app/backend/src/main/resources/public \
-    && cp frontend/target/scala-3.6.4/archiemate-frontend-opt.js /app/backend/src/main/resources/public/ \
+    && cp frontend/target/scala-3.6.4/archiemate-frontend-fastopt.js /app/backend/src/main/resources/public/ \
     && cp frontend/index.html /app/backend/src/main/resources/public/ \
     && sbt backend/universal:packageBin
 

@@ -61,7 +61,11 @@ lazy val frontend = project
   .enablePlugins(ScalaJSPlugin)
   .settings(
     name := "archiemate-frontend",
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    // Use NoModule for standalone JS (production Docker build)
+    // ESModule is used for Vite dev server (frontend/dev mode)
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.NoModule) },
+    // Set the main class for the JS output
+    Compile / mainClass := Some("com.archimond7450.archiemate.App"),
     // Version info for footer
     Compile / sourceGenerators += Def.task {
       val versionInfo = s"""|package com.archimond7450.archiemate

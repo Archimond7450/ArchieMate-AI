@@ -3,14 +3,12 @@ package com.archimond7450.archiemate
 import com.archimond7450.archiemate.pages.HomePage
 import com.archimond7450.archiemate.components.Footer
 import org.scalajs.dom
+import scala.scalajs.js.annotation.JSExportTopLevel
 
 object App {
 
-  private def createEl(tag: String): dom.HTMLElement = {
-    dom.document.createElement(tag).asInstanceOf[dom.HTMLElement]
-  }
-
-  def main(args: Array[String]): Unit = {
+  @JSExportTopLevel("ArchieMateApp")
+  def mount(): Unit = {
     val appEl = dom.document.getElementById("app").asInstanceOf[dom.HTMLElement]
 
     val wrapper = createEl("div")
@@ -24,5 +22,9 @@ object App {
     wrapper.appendChild(Footer.render())
 
     appEl.appendChild(wrapper)
+  }
+
+  private def createEl(tag: String): dom.HTMLElement = {
+    dom.document.createElement(tag).asInstanceOf[dom.HTMLElement]
   }
 }
