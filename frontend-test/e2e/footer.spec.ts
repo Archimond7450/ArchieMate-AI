@@ -44,6 +44,23 @@ test.describe('Footer', () => {
     await expect(footer).toContainText('Archimond7450');
   });
 
+  test('footer copyright link only wraps Archimond7450', async ({ page }) => {
+    await page.goto('/');
+    const footer = page.locator('footer');
+    const twitchLink = footer.locator('a[href="https://twitch.tv/archimond7450"]');
+    await expect(twitchLink).toBeVisible();
+    await expect(twitchLink).toHaveText('Archimond7450');
+    // Verify the link does not contain the AI model name
+    await expect(twitchLink).not.toContainText('qwen');
+  });
+
+  test('footer contains full copyright line', async ({ page }) => {
+    await page.goto('/');
+    const footer = page.locator('footer');
+    await expect(footer).toContainText('© 2022');
+    await expect(footer).toContainText('& pi using');
+  });
+
   test('footer contains AI model name', async ({ page }) => {
     await page.goto('/');
     const footer = page.locator('footer');

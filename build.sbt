@@ -82,6 +82,7 @@ lazy val frontend = project
     libraryDependencies ++= Seq(
       "org.scala-js" %%% "scalajs-dom" % "2.8.0",
       "com.raquo" %%% "laminar" % "17.2.1",
+      "com.raquo" %%% "waypoint" % "9.0.0",
       // Testing
       "org.scala-js" %%% "scalajs-dom" % "2.8.0" % Test,
       "org.scalatest" %%% "scalatest" % "3.2.19" % Test
