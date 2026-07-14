@@ -11,7 +11,7 @@ RUN curl -L https://github.com/sbt/sbt/releases/download/v1.10.11/sbt-1.10.11.tg
 COPY project/ project/
 COPY build.sbt .
 
-# Download dependencies (cache layer)
+# Download dependencies first (for caching)
 RUN sbt update
 
 # Copy source
@@ -19,16 +19,17 @@ COPY backend/ backend/
 COPY shared/ shared/
 COPY frontend/ frontend/
 
-# Compile Scala.js
-RUN sbt frontend/fullOptJS
+# Compile Scala.js and build backend (universal zip)
+RUN sbt frontend/fullOptJS \
+    && mkdir -p /app/backend/src/main/resources/public \
+    && cp frontend/target/scala-3.6.4/archiemate-frontend-opt.js /app/backend/src/main/resources/public/ \
+    && cp frontend/index.html /app/backend/src/main/resources/public/ \
+    && sbt backend/universal:packageBin
 
-# Copy the compiled Scala.js output to backend's public resources
-RUN mkdir -p /app/backend/src/main/resources/public && \
-    cp frontend/target/scala-3.6.4/archiemate-frontend-opt.js /app/backend/src/main/resources/public/ && \
-    cp frontend/index.html /app/backend/src/main/resources/public/
-
-# Build backend (fat jar) with static frontend included
-RUN sbt clean backend/assembly
+# Extract the zip to a directory for the runtime stage
+RUN apt-get update && apt-get install -y unzip && \
+    unzip -q /app/backend/target/universal/archiemate-backend-*.zip -d /app/backend/target/universal/extracted && \
+    apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 # ==================== Runtime stage ====================
 FROM eclipse-temurin:21-jre
@@ -38,8 +39,8 @@ RUN groupadd -r archiemate && useradd -r -g archiemate archiemate
 
 WORKDIR /app
 
-# Copy built artifacts
-COPY --from=build /app/backend/target/scala-3.6.4/archiemate-backend-assembly-*.jar /app/archiemate.jar
+# Copy the packaged application
+COPY --from=build /app/backend/target/universal/extracted/* /app/
 
 # Copy configuration
 COPY backend/src/main/resources/application.conf /app/conf/application.conf
@@ -55,8 +56,4 @@ EXPOSE 8080
 USER archiemate
 
 # Run the application
-ENTRYPOINT ["java", \
-    "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=75.0", \
-    "-Djava.security.egd=file:/dev/./urandom", \
-    "-jar", "/app/archiemate.jar"]
+CMD ["/app/bin/archiemate-backend"]

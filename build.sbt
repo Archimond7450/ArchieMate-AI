@@ -25,16 +25,10 @@ lazy val commonJvmSettings = Seq(
 // ==================== Backend ====================
 lazy val backend = project
   .in(file("backend"))
-  .enablePlugins(AssemblyPlugin)
+  .enablePlugins(JavaAppPackaging)
   .settings(commonJvmSettings)
   .settings(
     name := "archiemate-backend",
-    assembly / mainClass := Some("com.archimond7450.archiemate.ArchieMateApp"),
-    assembly / assemblyMergeStrategy := {
-      case PathList("META-INF", xs@_*) => MergeStrategy.discard
-      case "reference.conf" => MergeStrategy.concat
-      case x => MergeStrategy.first
-    },
     libraryDependencies ++= Seq(
       // Pekko - all at same version
       "org.apache.pekko" %% "pekko-actor" % "1.1.5",
@@ -54,6 +48,8 @@ lazy val backend = project
       "io.circe" %% "circe-parser" % "0.14.14",
       // Config
       "com.typesafe" % "config" % "1.4.3",
+      // Logging
+      "ch.qos.logback" % "logback-classic" % "1.5.18",
       // Testcontainers for PostgreSQL in tests (add when needed)
       // "org.testcontainers" % "postgresql" % "1.20.6" % Test
     )
