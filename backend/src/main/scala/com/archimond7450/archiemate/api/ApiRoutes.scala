@@ -31,6 +31,10 @@ class ApiRoutes(config: AppConfig) {
     } ~
     pathPrefix("static") {
       getFromResourceDirectory("public")
+    } ~
+    // Catch-all for SPA routing — serve index.html for any unknown path
+    get {
+      getFromResource("public/index.html")
     }
   }
 }

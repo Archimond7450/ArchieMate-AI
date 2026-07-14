@@ -17,10 +17,28 @@ docker/      - Dockerfile + docker-compose
 sbt backend/run          # Start backend
 sbt backend/test         # Backend tests
 sbt frontend/test        # Frontend Scala tests
-cd frontend-test && npm run test:e2e   # E2E tests
 cd frontend-test && npm run test       # Vitest unit tests
-docker compose -f docker/docker-compose.yml up -d  # Full stack
+docker compose up -d  # Full stack
 ```
+
+## E2E Testing
+E2E tests require the full Docker stack (PostgreSQL + backend). Always follow this exact sequence:
+
+```bash
+# 1. Force rebuild and start containers
+docker compose build --no-cache archiemate && docker compose up --force-recreate -d
+
+# 2. Wait for health checks
+sleep 5
+
+# 3. Run E2E tests
+cd frontend-test && npm run test:e2e
+
+# 4. Stop containers and remove orphans
+cd .. && docker compose down --remove-orphans
+```
+
+**Important:** Never skip the `build --no-cache` step — without it, cached Docker layers may serve stale frontend code. Never skip `down --remove-orphans` — orphans can interfere with subsequent runs.
 
 ## Configuration
 - `backend/src/main/resources/application.conf` - Main config
