@@ -1,0 +1,50 @@
+# Compiled class files
+*.class
+
+# SBT
+target/
+project/target/
+project/project/target/
+project/target/
+*.sbt.lock
+
+# Scala.js
+frontend/target/
+frontend/scala-steward/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+frontend/node_modules/
+frontend-test/node_modules/
+frontend/dist/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# Build artifacts
+*.jar
+*.war
+*.ear
+
+# Coverage
+coverage/
+.coverage
+lcov.info
+
+# Docker
+docker-compose.override.yml

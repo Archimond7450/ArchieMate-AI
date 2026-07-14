@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+target/
+project/target/
+frontend/target/
+frontend/node_modules/
+frontend/dist/
+frontend-test/node_modules/
+
+# sbt
+*.sbt
+project/build.properties
+
+# Logs
+*.log
+
+# Docker
+docker/
