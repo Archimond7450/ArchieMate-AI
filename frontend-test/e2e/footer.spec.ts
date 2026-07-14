@@ -47,7 +47,7 @@ test.describe('Footer', () => {
   test('footer contains AI model name', async ({ page }) => {
     await page.goto('/');
     const footer = page.locator('footer');
-    await expect(footer).toContainText('Pi');
+    await expect(footer).toContainText('qwen/qwen3.6-35b-a3b');
   });
 
   test('footer contains version info', async ({ page }) => {

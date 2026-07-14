@@ -8,7 +8,7 @@ object Footer {
 
   private val currentYear: String = new Date().getFullYear().toString
 
-  private val aiModelName: String = "Pi (by pi.dev)"
+  private val aiModelName: String = "qwen/qwen3.6-35b-a3b"
 
   private def createEl(tag: String): dom.HTMLElement = {
     dom.document.createElement(tag).asInstanceOf[dom.HTMLElement]
