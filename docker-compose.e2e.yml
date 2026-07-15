@@ -1,0 +1,44 @@
+services:
+  archiemate:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/archiemate
+      - DATABASE_USER=archiemate
+      - DATABASE_PASSWORD=archiemate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - archiemate
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=archiemate
+      - POSTGRES_USER=archiemate
+      - POSTGRES_PASSWORD=archiemate
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_e2e:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archiemate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: "no"
+    networks:
+      - archiemate
+
+volumes:
+  postgres_data_e2e:
+
+networks:
+  archiemate:
+    driver: bridge
