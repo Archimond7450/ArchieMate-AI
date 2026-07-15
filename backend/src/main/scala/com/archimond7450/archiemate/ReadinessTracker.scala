@@ -18,9 +18,7 @@ object ReadinessTracker {
 
   private val actorName = "readiness-tracker"
 
-  /** Marker trait for actors that can signal readiness.
-    */
-  sealed trait ReadySignal
+  sealed trait Command
 
   /** Returns an unsupervised behavior for this actor. Use when the parent
     * already applies its own supervision.
@@ -37,14 +35,14 @@ object ReadinessTracker {
     Behaviors.supervise(apply()).onFailure[Throwable](SupervisorStrategy.resume)
 
   // ----------------------------------------------------------------
-  // Commands to the readiness tracker (sealed, named Command)
+  // Commands to the readiness tracker
   // ----------------------------------------------------------------
 
-  sealed trait Command
-  final case class Register(actorRef: ActorRef[ReadySignal]) extends Command
+  final case class Register(actorRef: ActorRef[Any]) extends Command
+  final case class Deregister(actorRef: ActorRef[Any]) extends Command
   final case class CheckReadiness(replyTo: ActorRef[ReadinessResponse])
       extends Command
-  final case class Ready(actorRef: ActorRef[ReadySignal]) extends Command
+  final case class Ready(actorRef: ActorRef[Any]) extends Command
 
   // ----------------------------------------------------------------
   // Responses to CheckReadiness (sealed)
@@ -59,8 +57,8 @@ object ReadinessTracker {
   // ----------------------------------------------------------------
 
   private case class TrackerState(
-      registry: Set[ActorRef[ReadySignal]] = Set.empty,
-      readyCount: Int = 0
+      registry: Set[ActorRef[Any]] = Set.empty,
+      readySet: Set[ActorRef[Any]] = Set.empty
   )
 
 }
@@ -80,13 +78,23 @@ class ReadinessTracker private () {
         mainBehavior(state.copy(registry = state.registry + register.actorRef))
 
       case check: CheckReadiness =>
-        val isReady = state.registry.nonEmpty && state.readyCount == state.registry.size
+        val isReady = state.registry.nonEmpty && state.readySet == state.registry
         check.replyTo ! (if (isReady) ReadyResponse else NotReadyResponse)
         Behaviors.same
 
       case ready: Ready =>
         if (state.registry.contains(ready.actorRef)) {
-          mainBehavior(state.copy(readyCount = state.readyCount + 1))
+          mainBehavior(state.copy(readySet = state.readySet + ready.actorRef))
+        } else {
+          Behaviors.same
+        }
+
+      case deregister: Deregister =>
+        if (state.registry.contains(deregister.actorRef)) {
+          mainBehavior(state.copy(
+            registry = state.registry - deregister.actorRef,
+            readySet = state.readySet - deregister.actorRef
+          ))
         } else {
           Behaviors.same
         }

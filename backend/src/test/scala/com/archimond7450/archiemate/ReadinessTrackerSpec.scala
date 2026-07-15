@@ -25,7 +25,7 @@ class ReadinessTrackerSpec
 
     "return NotReadyResponse when a registered actor has not sent Ready" in {
       val tracker = spawnTracker("2")
-      val actor = testKit.createTestProbe[ReadinessTracker.ReadySignal]("actor").ref
+      val actor = testKit.createTestProbe[ReadinessTracker.Command]("actor").ref.asInstanceOf[ActorRef[Any]]
       tracker ! ReadinessTracker.Register(actor)
       tracker ! ReadinessTracker.CheckReadiness(probe.ref)
       probe.expectMessage(ReadinessTracker.NotReadyResponse)
@@ -33,7 +33,7 @@ class ReadinessTrackerSpec
 
     "return ReadyResponse when the only registered actor has sent Ready" in {
       val tracker = spawnTracker("3")
-      val actor = testKit.createTestProbe[ReadinessTracker.ReadySignal]("actor").ref
+      val actor = testKit.createTestProbe[ReadinessTracker.Command]("actor").ref.asInstanceOf[ActorRef[Any]]
 
       tracker ! ReadinessTracker.Register(actor)
       tracker ! ReadinessTracker.Ready(actor)
@@ -43,8 +43,8 @@ class ReadinessTrackerSpec
 
     "return NotReadyResponse when only some registered actors have sent Ready" in {
       val tracker = spawnTracker("4")
-      val actorA = testKit.createTestProbe[ReadinessTracker.ReadySignal]("actorA").ref
-      val actorB = testKit.createTestProbe[ReadinessTracker.ReadySignal]("actorB").ref
+      val actorA = testKit.createTestProbe[ReadinessTracker.Command]("actorA").ref.asInstanceOf[ActorRef[Any]]
+      val actorB = testKit.createTestProbe[ReadinessTracker.Command]("actorB").ref.asInstanceOf[ActorRef[Any]]
 
       tracker ! ReadinessTracker.Register(actorA)
       tracker ! ReadinessTracker.Register(actorB)
@@ -55,8 +55,8 @@ class ReadinessTrackerSpec
 
     "return ReadyResponse when all registered actors have sent Ready" in {
       val tracker = spawnTracker("5")
-      val actorA = testKit.createTestProbe[ReadinessTracker.ReadySignal]("actorA").ref
-      val actorB = testKit.createTestProbe[ReadinessTracker.ReadySignal]("actorB").ref
+      val actorA = testKit.createTestProbe[ReadinessTracker.Command]("actorA").ref.asInstanceOf[ActorRef[Any]]
+      val actorB = testKit.createTestProbe[ReadinessTracker.Command]("actorB").ref.asInstanceOf[ActorRef[Any]]
 
       tracker ! ReadinessTracker.Register(actorA)
       tracker ! ReadinessTracker.Register(actorB)
@@ -68,13 +68,39 @@ class ReadinessTrackerSpec
 
     "ignore Ready from actors that are not registered" in {
       val tracker = spawnTracker("6")
-      val registered = testKit.createTestProbe[ReadinessTracker.ReadySignal]("registered").ref
-      val unregistered = testKit.createTestProbe[ReadinessTracker.ReadySignal]("unregistered").ref
+      val registered = testKit.createTestProbe[ReadinessTracker.Command]("registered").ref.asInstanceOf[ActorRef[Any]]
+      val unregistered = testKit.createTestProbe[ReadinessTracker.Command]("unregistered").ref.asInstanceOf[ActorRef[Any]]
 
       tracker ! ReadinessTracker.Register(registered)
       tracker ! ReadinessTracker.Ready(unregistered)
       tracker ! ReadinessTracker.CheckReadiness(probe.ref)
       probe.expectMessage(ReadinessTracker.NotReadyResponse)
+    }
+
+    "return NotReadyResponse after an actor deregisters" in {
+      val tracker = spawnTracker("7")
+      val actor = testKit.createTestProbe[ReadinessTracker.Command]("actor").ref.asInstanceOf[ActorRef[Any]]
+
+      tracker ! ReadinessTracker.Register(actor)
+      tracker ! ReadinessTracker.Ready(actor)
+      tracker ! ReadinessTracker.CheckReadiness(probe.ref)
+      probe.expectMessage(ReadinessTracker.ReadyResponse)
+
+      tracker ! ReadinessTracker.Deregister(actor)
+      tracker ! ReadinessTracker.CheckReadiness(probe.ref)
+      probe.expectMessage(ReadinessTracker.NotReadyResponse)
+    }
+
+    "ignore Deregister from actors that are not registered" in {
+      val tracker = spawnTracker("8")
+      val registered = testKit.createTestProbe[ReadinessTracker.Command]("registered").ref.asInstanceOf[ActorRef[Any]]
+      val unregistered = testKit.createTestProbe[ReadinessTracker.Command]("unregistered").ref.asInstanceOf[ActorRef[Any]]
+
+      tracker ! ReadinessTracker.Register(registered)
+      tracker ! ReadinessTracker.Ready(registered)
+      tracker ! ReadinessTracker.Deregister(unregistered)
+      tracker ! ReadinessTracker.CheckReadiness(probe.ref)
+      probe.expectMessage(ReadinessTracker.ReadyResponse)
     }
   }
 }

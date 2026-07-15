@@ -1,116 +1,99 @@
 package com.archimond7450.archiemate
 
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
-import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SupervisorStrategy}
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Behavior, SupervisorStrategy}
 import com.archimond7450.archiemate.api.ApiRoutes
 import com.archimond7450.archiemate.settings.*
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.pekko.actor.ClassicActorSystemProvider
+import org.apache.pekko.http.scaladsl.Http
 import org.slf4j.{Logger, LoggerFactory}
 
-import scala.concurrent.duration.*
-import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success}
+import scala.concurrent.duration.*
+import scala.concurrent.ExecutionContext
 
 object ArchieMateApp {
 
-  private val logger: Logger = LoggerFactory.getLogger(ArchieMateApp.getClass)
+  private val logger: Logger = LoggerFactory.getLogger(classOf[ArchieMateApp.type])
+
+  sealed trait Command
+  private case object StartHttp extends Command
+  private final case class HttpBound(binding: Http.ServerBinding) extends Command
+  private case object Stop extends Command
+
+  def apply(
+      tracker: ActorRef[ReadinessTracker.Command],
+      appConfig: AppConfig,
+      classicSystem: ClassicActorSystemProvider
+  ): Behavior[Command] =
+    Behaviors.supervise[Command] {
+      Behaviors.setup { ctx =>
+        given ExecutionContext = scala.concurrent.ExecutionContext.global
+        tracker ! ReadinessTracker.Register(ctx.self.asInstanceOf[ActorRef[Any]])
+        ctx.self ! StartHttp
+        withHttp(tracker, appConfig, classicSystem)
+      }
+    }.onFailure[Throwable](SupervisorStrategy.restart)
+
+  private def withHttp(
+      tracker: ActorRef[ReadinessTracker.Command],
+      appConfig: AppConfig,
+      classicSystem: ClassicActorSystemProvider
+  )(using ExecutionContext): Behavior[Command] =
+    Behaviors.setup { ctx =>
+      given ClassicActorSystemProvider = classicSystem
+      Behaviors.receiveMessage {
+        case StartHttp =>
+          val apiRoutes = new ApiRoutes(appConfig, tracker, classicSystem.classicSystem)
+          val bindingFuture = Http().newServerAt(appConfig.server.host, appConfig.server.port).bind(apiRoutes.apiRoutes)
+          bindingFuture.onComplete {
+            case scala.util.Success(binding) =>
+              ctx.self ! HttpBound(binding)
+            case scala.util.Failure(ex) =>
+              ctx.log.error("Failed to bind the HTTP server!", ex)
+              tracker ! ReadinessTracker.Deregister(ctx.self.asInstanceOf[ActorRef[Any]])
+          }
+          Behaviors.same
+
+        case HttpBound(binding) =>
+          ctx.log.info("ArchieMate HTTP bound to {}", binding.localAddress)
+          binding.addToCoordinatedShutdown(10.seconds)(classicSystem.classicSystem)
+          tracker ! ReadinessTracker.Ready(ctx.self.asInstanceOf[ActorRef[Any]])
+          ready(tracker)
+
+        case Stop =>
+          tracker ! ReadinessTracker.Deregister(ctx.self.asInstanceOf[ActorRef[Any]])
+          Behaviors.stopped
+      }
+    }
+
+  private def ready(tracker: ActorRef[ReadinessTracker.Command]): Behavior[Command] =
+    Behaviors.receiveMessage {
+      case Stop =>
+        Behaviors.stopped
+      case msg =>
+        Behaviors.same
+    }
 
   def main(args: Array[String]): Unit = {
-    val ec: ExecutionContext = scala.concurrent.ExecutionContext.global
-    given ExecutionContext = ec
-
-    val config: Config = ConfigFactory.load()
+    val config = ConfigFactory.load()
     val appConfig = AppConfig(config)
 
-    val classicSystem: ClassicActorSystemProvider =
-      new ClassicActorSystemProvider {
-        def classicSystem: org.apache.pekko.actor.ActorSystem =
-          org.apache.pekko.actor.ActorSystem("archiemate-classic", config)
-      }
-    given ClassicActorSystemProvider = classicSystem
-
-    val readinessPromise = Promise[ActorRef[ReadinessTracker.Command]]()
-
-    val rootBehavior = Behaviors.supervise[Nothing](
-      Behaviors.setup { ctx =>
-        val tracker = ctx.spawn(ReadinessTracker.supervised(), "readiness-tracker")
-        readinessPromise.success(tracker)
-        Behaviors.empty
-      }
-    ).onFailure[Throwable](SupervisorStrategy.restart)
-
-    val system: ActorSystem[Nothing] = ActorSystem(rootBehavior, "archiemate-system")
-
-    logger.info("ArchieMate starting on port {}", appConfig.server.port)
-
-    readinessPromise.future.onComplete {
-      case Success(trackerRef) =>
-        import org.apache.pekko.actor.typed.scaladsl.adapter.*
-        val httpBindingFuture = startHttpServer(appConfig, trackerRef)
-        Runtime.getRuntime.addShutdownHook(new Thread(() => {
-          given ExecutionContext = ec
-          logger.info("ArchieMate shutting down...")
-          shutdown(httpBindingFuture, system, classicSystem)
-        }))
-
-      case Failure(ex) =>
-        logger.error("Failed to spawn ReadinessTracker", ex)
-        system.terminate()
+    val classicSystem = new ClassicActorSystemProvider {
+      def classicSystem = org.apache.pekko.actor.ActorSystem("archiemate-classic", config)
     }
-  }
 
-  private def startHttpServer(
-      appConfig: AppConfig,
-      trackerRef: ActorRef[ReadinessTracker.Command]
-  )(using cs: ClassicActorSystemProvider)(using ExecutionContext): Future[org.apache.pekko.http.scaladsl.Http.ServerBinding] = {
-    val apiRoutes = new ApiRoutes(
-      appConfig,
-      trackerRef,
-      cs.classicSystem
-    )
-    val httpBindingFuture = HttpServer.start(
-      routes = apiRoutes,
-      address = appConfig.server.host,
-      port = appConfig.server.port
+    val tracker = ActorSystem(
+      ReadinessTracker.supervised(),
+      "readiness-tracker"
     )
 
-    httpBindingFuture.onComplete {
-      case Success(binding) =>
-        logger.info("ArchieMate HTTP bound to {}", binding.localAddress)
-      case Failure(ex) =>
-        logger.error("Failed to bind HTTP server", ex)
-    }
+    val rootBehavior = ArchieMateApp(tracker, appConfig, classicSystem)
+    val system = ActorSystem(rootBehavior, "archiemate-system")
 
-    httpBindingFuture
-  }
-
-  private def shutdown(
-      httpBindingFuture: Future[org.apache.pekko.http.scaladsl.Http.ServerBinding],
-      system: ActorSystem[Nothing],
-      classicSystem: ClassicActorSystemProvider
-  )(using ec: ExecutionContext): Unit = {
-    given ExecutionContext = ec
-
-    def terminateClassic(): Unit = {
-      classicSystem.classicSystem.terminate()
-      logger.info("ArchieMate shut down complete")
-    }
-
-    httpBindingFuture.flatMap(_.unbind()).onComplete {
-      case Success(_) =>
-        logger.info("HTTP server unbound")
-        system.terminate()
-      case Failure(ex) =>
-        logger.error("Error unbinding HTTP", ex)
-        system.terminate()
-    }
-
-    system.whenTerminated.onComplete {
-      case Success(_) => terminateClassic()
-      case Failure(ex) =>
-        logger.error("Error terminating typed system", ex)
-        terminateClassic()
-    }
+    Runtime.getRuntime.addShutdownHook(new Thread(() => {
+      system.terminate()
+    }))
   }
 }
