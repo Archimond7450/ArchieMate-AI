@@ -39,7 +39,7 @@ class ApiRoutes(
                 ReadinessTracker.CheckReadiness(ref)
               )
             ) {
-              case ReadinessTracker.ReadyResponse    => complete(StatusCodes.OK)
+              case ReadinessTracker.ReadyResponse    => complete(StatusCodes.NoContent)
               case ReadinessTracker.NotReadyResponse => complete(StatusCodes.ServiceUnavailable)
               case _                                 => complete(StatusCodes.ServiceUnavailable)
             }

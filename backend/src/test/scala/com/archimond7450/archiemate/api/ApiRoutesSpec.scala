@@ -56,7 +56,7 @@ class ApiRoutesSpec
   }
 
   "GET /api/v1/ready" should {
-    "return 200 OK when readinessTracker responds Ready" in {
+    "return No Content when readinessTracker responds Ready" in {
       val test = Get("/api/v1/ready") ~> apiRoutes
 
       readinessProbe.expectMessageType[ReadinessTracker.CheckReadiness] match {
@@ -65,7 +65,7 @@ class ApiRoutesSpec
       }
 
       test ~> check {
-        status shouldEqual StatusCodes.OK
+        status shouldEqual StatusCodes.NoContent
       }
     }
 
