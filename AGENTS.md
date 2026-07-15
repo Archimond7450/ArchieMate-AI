@@ -65,5 +65,11 @@ cd .. && docker compose -f docker-compose.e2e.yml down --remove-orphans
 ## Version Info
 Footer auto-generates version/built-at from build.sbt via `VersionInfo` object.
 
+## Pekko Typed Actors
+See [pekko-typed-actors-best-practices.md](docs/pekko-typed-actors-best-practices.md) for conventions on writing Pekko Typed actors (object vs class pattern, state management, supervision, etc.).
+
+## ScalaTest
+Prefer `AnyWordSpecLike` over `AnyWordSpec` for all ScalaTest suites. Actor tests must extend both `ScalaTestWithActorTestKit` and `AnyWordSpecLike`.
+
 ## Progress
 See PROGRESS.md for development tracking.

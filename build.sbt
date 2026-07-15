@@ -18,7 +18,8 @@ lazy val commonJvmSettings = Seq(
   libraryDependencies ++= Seq(
     "org.scalatest" %% "scalatest-core" % "3.2.19" % Test,
     "org.scalatest" %% "scalatest-flatspec" % "3.2.19" % Test,
-    "org.scalatest" %% "scalatest-shouldmatchers" % "3.2.19" % Test
+    "org.scalatest" %% "scalatest-shouldmatchers" % "3.2.19" % Test,
+    "org.scalatest" %% "scalatest-wordspec" % "3.2.19" % Test
   )
 )
 
@@ -41,6 +42,7 @@ lazy val backend = project
       "org.apache.pekko" %% "pekko-persistence-typed" % "1.1.5",
       "org.apache.pekko" %% "pekko-persistence-jdbc" % "1.2.0",
       "org.apache.pekko" %% "pekko-testkit" % "1.1.5" % Test,
+      "org.apache.pekko" %% "pekko-actor-testkit-typed" % "1.1.5" % Test,
       "org.apache.pekko" %% "pekko-http-testkit" % "1.1.0" % Test,
       // Circe
       "io.circe" %% "circe-core" % "0.14.14",
