@@ -1,15 +1,21 @@
 package com.archimond7450.archiemate.api
 
-import org.apache.pekko.actor.typed.ActorRef
-import org.apache.pekko.actor.typed.scaladsl.adapter._
+import com.archimond7450.archiemate.ReadinessTracker
+import com.archimond7450.archiemate.ReadinessTracker.ReadyResponse
+import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, ServerConfig}
+import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
+import org.apache.pekko.actor.typed.Scheduler
+import org.apache.pekko.actor.typed.scaladsl.adapter.ClassicActorSystemOps
+import org.apache.pekko.actor.typed.ActorSystem as TypedActorSystem
 import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.testkit.ScalatestRouteTest
+import org.apache.pekko.util.Timeout
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
-import com.archimond7450.archiemate.ReadinessTracker
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, ServerConfig}
+import scala.concurrent.duration._
 
 class ApiRoutesSpec
     extends AnyWordSpecLike
@@ -26,42 +32,54 @@ class ApiRoutesSpec
     )
   )
 
-  // Provide typed ActorSystem as implicit for TestProbe
-  private val typedSystem: org.apache.pekko.actor.typed.ActorSystem[Nothing] = system.toTyped
-  given org.apache.pekko.actor.typed.ActorSystem[Nothing] = typedSystem
+  private val classicSystem: ActorSystem = ActorSystem("test-classic")
+  private given typedSystem: TypedActorSystem[Nothing] = classicSystem.toTyped
+  private given Scheduler = typedSystem.scheduler
+  private given Timeout = Timeout(3.seconds)
 
-  private val readinessProbe: TestProbe[ReadinessTracker.ReadinessResponse] =
-    TestProbe[ReadinessTracker.ReadinessResponse]("readiness-response")
-  private val readinessTracker: ActorRef[ReadinessTracker.Command] = {
-    val trackerSystem = org.apache.pekko.actor.typed.ActorSystem(
-      ReadinessTracker.supervised(),
-      "readiness-tracker"
-    )
-    trackerSystem.asInstanceOf[ActorRef[ReadinessTracker.Command]]
-  }
+  private val readinessProbe: TestProbe[ReadinessTracker.Command] =
+    TestProbe[ReadinessTracker.Command]("readiness-tracker")
+  private val readinessTracker = readinessProbe.ref
 
-  private val routes = new ApiRoutes(
+  private val apiRoutes = new ApiRoutes(
     testConfig,
     readinessTracker,
-    system
-  )
+    classicSystem
+  ).apiRoutes
 
   "GET /api/v1/live" should {
     "return No Content" in {
-      Get("/api/v1/live") ~> routes.apiRoutes ~> check {
-        status shouldBe StatusCodes.NoContent
+      Get("/api/v1/live") ~> apiRoutes ~> check {
+        status shouldEqual StatusCodes.NoContent
       }
     }
   }
 
   "GET /api/v1/ready" should {
-    "return ServiceUnavailable when no actors are registered" in {
-      Get("/api/v1/ready") ~> routes.apiRoutes ~> check {
-        status shouldBe StatusCodes.ServiceUnavailable
+    "return 200 OK when readinessTracker responds Ready" in {
+      val test = Get("/api/v1/ready") ~> apiRoutes
+
+      readinessProbe.expectMessageType[ReadinessTracker.CheckReadiness] match {
+        case ReadinessTracker.CheckReadiness(replyTo) =>
+          replyTo ! ReadyResponse
+      }
+
+      test ~> check {
+        status shouldEqual StatusCodes.OK
+      }
+    }
+
+    "return 503 ServiceUnavailable when readinessTracker responds NotReady" in {
+      val test = Get("/api/v1/ready") ~> apiRoutes
+
+      readinessProbe.expectMessageType[ReadinessTracker.CheckReadiness] match {
+        case ReadinessTracker.CheckReadiness(replyTo) =>
+          replyTo ! NotReadyResponse
+      }
+
+      test ~> check {
+        status shouldEqual StatusCodes.ServiceUnavailable
       }
     }
   }
-
-  // Note: Non-matching paths return 404 (standard Pekko HTTP behavior)
-  // Testing this requires checking the raw response, which is beyond basic route testing
 }
