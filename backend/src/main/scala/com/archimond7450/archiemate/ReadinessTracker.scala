@@ -39,7 +39,6 @@ object ReadinessTracker {
   // ----------------------------------------------------------------
 
   final case class Register(actorRef: ActorRef[Any]) extends Command
-  final case class Deregister(actorRef: ActorRef[Any]) extends Command
   final case class CheckReadiness(replyTo: ActorRef[ReadinessResponse])
       extends Command
   final case class Ready(actorRef: ActorRef[Any]) extends Command
@@ -85,16 +84,6 @@ class ReadinessTracker private () {
       case ready: Ready =>
         if (state.registry.contains(ready.actorRef)) {
           mainBehavior(state.copy(readySet = state.readySet + ready.actorRef))
-        } else {
-          Behaviors.same
-        }
-
-      case deregister: Deregister =>
-        if (state.registry.contains(deregister.actorRef)) {
-          mainBehavior(state.copy(
-            registry = state.registry - deregister.actorRef,
-            readySet = state.readySet - deregister.actorRef
-          ))
         } else {
           Behaviors.same
         }

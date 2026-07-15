@@ -76,31 +76,5 @@ class ReadinessTrackerSpec
       tracker ! ReadinessTracker.CheckReadiness(probe.ref)
       probe.expectMessage(ReadinessTracker.NotReadyResponse)
     }
-
-    "return NotReadyResponse after an actor deregisters" in {
-      val tracker = spawnTracker("7")
-      val actor = testKit.createTestProbe[ReadinessTracker.Command]("actor").ref.asInstanceOf[ActorRef[Any]]
-
-      tracker ! ReadinessTracker.Register(actor)
-      tracker ! ReadinessTracker.Ready(actor)
-      tracker ! ReadinessTracker.CheckReadiness(probe.ref)
-      probe.expectMessage(ReadinessTracker.ReadyResponse)
-
-      tracker ! ReadinessTracker.Deregister(actor)
-      tracker ! ReadinessTracker.CheckReadiness(probe.ref)
-      probe.expectMessage(ReadinessTracker.NotReadyResponse)
-    }
-
-    "ignore Deregister from actors that are not registered" in {
-      val tracker = spawnTracker("8")
-      val registered = testKit.createTestProbe[ReadinessTracker.Command]("registered").ref.asInstanceOf[ActorRef[Any]]
-      val unregistered = testKit.createTestProbe[ReadinessTracker.Command]("unregistered").ref.asInstanceOf[ActorRef[Any]]
-
-      tracker ! ReadinessTracker.Register(registered)
-      tracker ! ReadinessTracker.Ready(registered)
-      tracker ! ReadinessTracker.Deregister(unregistered)
-      tracker ! ReadinessTracker.CheckReadiness(probe.ref)
-      probe.expectMessage(ReadinessTracker.ReadyResponse)
-    }
   }
 }

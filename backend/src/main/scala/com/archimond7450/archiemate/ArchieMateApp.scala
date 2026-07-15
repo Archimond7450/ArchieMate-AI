@@ -52,7 +52,6 @@ object ArchieMateApp {
               ctx.self ! HttpBound(binding)
             case scala.util.Failure(ex) =>
               ctx.log.error("Failed to bind the HTTP server!", ex)
-              tracker ! ReadinessTracker.Deregister(ctx.self.asInstanceOf[ActorRef[Any]])
           }
           Behaviors.same
 
@@ -63,7 +62,6 @@ object ArchieMateApp {
           ready(tracker)
 
         case Stop =>
-          tracker ! ReadinessTracker.Deregister(ctx.self.asInstanceOf[ActorRef[Any]])
           Behaviors.stopped
       }
     }
