@@ -68,6 +68,9 @@ Footer auto-generates version/built-at from build.sbt via `VersionInfo` object.
 ## Pekko Typed Actors
 See [pekko-typed-actors-best-practices.md](docs/pekko-typed-actors-best-practices.md) for conventions on writing Pekko Typed actors (object vs class pattern, state management, supervision, etc.).
 
+## Scala Best Practices
+See [scala-best-practices.md](docs/scala-best-practices.md) for conventions on Scala 3 syntax, given/using, extension methods, implicit conversions, and circe JSON encoding/decoding.
+
 ## ScalaTest
 Prefer `AnyWordSpecLike` over `AnyWordSpec` for all ScalaTest suites. Actor tests must extend both `ScalaTestWithActorTestKit` and `AnyWordSpecLike`.
 

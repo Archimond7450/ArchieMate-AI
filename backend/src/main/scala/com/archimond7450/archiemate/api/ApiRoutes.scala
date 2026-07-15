@@ -1,11 +1,23 @@
 package com.archimond7450.archiemate.api
 
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.actor.typed.Scheduler
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.{*, given}
+import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.server.Directives._
 import org.apache.pekko.http.scaladsl.server.Route
-import com.archimond7450.archiemate.settings.AppConfig
+import org.apache.pekko.util.Timeout
+import com.archimond7450.archiemate.ReadinessTracker
+import com.archimond7450.archiemate.settings.*
 
-class ApiRoutes(config: AppConfig) {
+import scala.concurrent.duration._
+
+class ApiRoutes(
+    config: AppConfig,
+    readinessTracker: ActorRef[ReadinessTracker.Command],
+    classicActorSystem: org.apache.pekko.actor.ActorSystem
+) {
 
   private val apiVersion = config.server.apiVersion
 
@@ -20,7 +32,17 @@ class ApiRoutes(config: AppConfig) {
         } ~
         path("ready") {
           get {
-            complete(StatusCodes.NoContent)
+            given Scheduler = classicActorSystem.toTyped.scheduler
+            given Timeout = Timeout(3.seconds)
+            onSuccess(
+              readinessTracker.ask[ReadinessTracker.ReadinessResponse](ref =>
+                ReadinessTracker.CheckReadiness(ref)
+              )
+            ) {
+              case ReadinessTracker.ReadyResponse    => complete(StatusCodes.OK)
+              case ReadinessTracker.NotReadyResponse => complete(StatusCodes.ServiceUnavailable)
+              case _                                 => complete(StatusCodes.ServiceUnavailable)
+            }
           }
         }
       }

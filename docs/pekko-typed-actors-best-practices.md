@@ -124,6 +124,10 @@ Behaviors.supervise(actor()).onFailure[Throwable](SupervisorStrategy.resume)
 
 This ensures the actor is restarted without losing its internal state, since state is carried in behavior parameters rather than mutable fields.
 
+## No Await
+
+**Never use `Await.result`, `Await.ready`, or `Await` in Pekko Typed code.** Blocking a thread defeats the purpose of the actor model and can starve the dispatcher. Use futures and callbacks, or `ask` patterns with `onComplete` / `map` / `flatMap` to chain asynchronous operations.
+
 ## Testing
 
 Actor tests must extend **`ScalaTestWithActorTestKit`** and **`AnyWordSpecLike`** (preferred over `AnyWordSpec` for consistency across the project).
