@@ -88,12 +88,15 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## TODO
 
-### Phase 7: Chatbot Platform Integration
-- [ ] Twitch IRC connection
-- [ ] Kick IRC connection
-- [ ] YouTube Live chat connection
-- [ ] Platform abstraction layer
-- [ ] Connection pooling and reconnection logic
+### Phase 7: Authentication
+- [ ] HTTP request actor (dedicated Pekko actor for outbound HTTP calls)
+- [ ] User token persistent actor (stores OAuth tokens per user)
+- [ ] Twitch login endpoint (`/api/v1/auth/twitch/login` → redirect to Twitch OAuth)
+- [ ] Twitch callback endpoint (`/api/v1/auth/twitch/callback` → exchange code for token)
+- [ ] Twitch User ID as primary user identifier (no scopes required)
+- [ ] Token refresh mechanism (auto-refresh on HTTP 401)
+- [ ] Authenticated route middleware / context propagation
+- [ ] Logout endpoint
 
 ### Phase 8: Actor System
 - [ ] Chat message actor
@@ -102,11 +105,13 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [ ] Persistence with Pekko Persistence
 - [ ] Cluster support (future)
 
-### Phase 9: Frontend Pages
-- [ ] Dashboard page
-- [ ] Settings page
-- [ ] Platform connection management UI
-- [ ] Chat viewer component
+### Phase 9: Platform Connection Management
+- [ ] Platform connection persistent actor (stores per-user platform connections)
+- [ ] Twitch platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
+- [ ] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
+- [ ] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
+- [ ] Dashboard page with platform connection UI
+- [ ] API endpoints for connection CRUD (`/api/v1/connections/...`)
 
 ### Phase 10: Chatbot Features
 - [ ] Command system (`!command` syntax)
@@ -115,7 +120,11 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [ ] Custom responses
 - [ ] Statistics and analytics
 
-### Phase 11: Production Hardening
+### Phase 11: Frontend Pages (remaining)
+- [ ] Settings page
+- [ ] Chat viewer component
+
+### Phase 12: Production Hardening
 - [ ] Health check improvements (database connectivity)
 - [ ] Metrics and monitoring
 - [ ] Structured logging
@@ -124,7 +133,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [ ] API versioning strategy
 - [ ] CI/CD pipeline
 
-### Phase 12: Documentation
+### Phase 13: Documentation
 - [ ] API documentation
 - [ ] Architecture decision records
 - [ ] Contributing guide
