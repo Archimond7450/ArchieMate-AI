@@ -8,7 +8,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.pekko.actor.ClassicActorSystemProvider
 import org.slf4j.{Logger, LoggerFactory}
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success}
 
@@ -92,7 +92,6 @@ object ArchieMateApp {
       classicSystem: ClassicActorSystemProvider
   )(using ec: ExecutionContext): Unit = {
     given ExecutionContext = ec
-    import org.apache.pekko.actor.typed.scaladsl.adapter.*
 
     def terminateClassic(): Unit = {
       classicSystem.classicSystem.terminate()

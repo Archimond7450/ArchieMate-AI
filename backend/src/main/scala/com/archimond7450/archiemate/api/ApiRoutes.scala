@@ -5,13 +5,13 @@ import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.{*, given}
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.http.scaladsl.model.StatusCodes
-import org.apache.pekko.http.scaladsl.server.Directives._
+import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.util.Timeout
 import com.archimond7450.archiemate.ReadinessTracker
 import com.archimond7450.archiemate.settings.*
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
 class ApiRoutes(
     config: AppConfig,
@@ -41,7 +41,6 @@ class ApiRoutes(
             ) {
               case ReadinessTracker.ReadyResponse    => complete(StatusCodes.NoContent)
               case ReadinessTracker.NotReadyResponse => complete(StatusCodes.ServiceUnavailable)
-              case _                                 => complete(StatusCodes.ServiceUnavailable)
             }
           }
         }

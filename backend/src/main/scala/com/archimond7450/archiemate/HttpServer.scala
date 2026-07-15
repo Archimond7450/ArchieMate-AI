@@ -13,7 +13,7 @@ object HttpServer {
       routes: ApiRoutes,
       address: String,
       port: Int
-  )(implicit classicSystem: ClassicActorSystemProvider): Future[Http.ServerBinding] = {
+  )(using classicSystem: ClassicActorSystemProvider): Future[Http.ServerBinding] = {
     Http().newServerAt(address, port).bind(routes.apiRoutes)
   }
 }

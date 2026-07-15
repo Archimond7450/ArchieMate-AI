@@ -67,7 +67,7 @@ object ReadinessTracker {
 
 class ReadinessTracker private () {
 
-  import ReadinessTracker._
+  import ReadinessTracker.*
 
   def initial(): Behavior[Command] = {
     val state = TrackerState()
