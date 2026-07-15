@@ -61,6 +61,22 @@ Use `given Conversion`:
 given Conversion[String, Option[Int]] = _.toIntOption
 ```
 
+## Logging
+
+Use `classOf[ObjectName.type]` for singleton objects, not `classOf[ObjectName]`:
+
+```scala
+private val logger = LoggerFactory.getLogger(classOf[MyApp.type])
+```
+
+## ScalaTest
+
+Use `shouldEqual` instead of `shouldBe` to avoid Scala 3 infix rewrite warnings:
+
+```scala
+status shouldEqual StatusCodes.OK
+```
+
 ## Imports
 
 ### Everything from a package (values only)

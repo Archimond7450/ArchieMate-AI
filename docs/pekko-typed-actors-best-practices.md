@@ -114,7 +114,48 @@ private case class TrackerState(
 mainBehavior(state.copy(ready = state.ready + sender))
 ```
 
-## Supervision
+## Supervising Root Behaviors
+
+When the root behavior handles `Nothing`, specify the type parameter on `supervise` to avoid needing `asInstanceOf`:
+
+```scala
+// Correct — no cast needed
+Behaviors.supervise[Nothing] {
+  Behaviors.setup { ctx =>
+    // ...
+  }
+}.onFailure[Throwable](SupervisorStrategy.restart)
+```
+
+## ActorRef Invariance
+
+`ActorRef` is **invariant** in its type parameter: `ActorRef[SubType]` is **not** a subtype of `ActorRef[SuperType]`. When you need to pass an actor ref to a registry that expects a broader type, use `ActorRef[Any]`:
+
+```scala
+// If the registry accepts ActorRef[Any], cast explicitly
+tracker ! ReadinessTracker.Register(ctx.self.asInstanceOf[ActorRef[Any]])
+```
+
+Do not rely on subtyping — the compiler will reject it.
+
+## pipeToSelf vs onComplete
+
+`pipeToSelf`'s callback has type `Try[T] => Unit` — it **cannot return a `Behavior`**. When you need to return a `Behavior` from the callback, use `onComplete` on the `Future` directly:
+
+```scala
+// WRONG — callback cannot return Behavior
+ctx.pipeToSelf(future) {
+  case Success(_) => ctx.self ! SomeMessage
+  case Failure(_) => Behaviors.stopped  // ❌ wrong return type
+}
+
+// CORRECT — use onComplete on the Future
+future.onComplete {
+  case Success(_) => ctx.self ! SomeMessage
+  case Failure(_) => // handle error
+}
+Behaviors.same  // return the behavior from the case
+```
 
 Actors that must preserve state across failures should be supervised with a **resume** strategy. When there is only one `SupervisorStrategy` for the entire error hierarchy, explicitly use the most generic type — `Throwable` — rather than a narrower type like `Exception`:
 
