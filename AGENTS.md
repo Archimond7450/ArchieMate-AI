@@ -75,4 +75,4 @@ See [scala-best-practices.md](docs/scala-best-practices.md) for conventions on S
 Prefer `AnyWordSpecLike` over `AnyWordSpec` for all ScalaTest suites. Actor tests must extend both `ScalaTestWithActorTestKit` and `AnyWordSpecLike`.
 
 ## Progress
-See PROGRESS.md for development tracking.
+See [PROGRESS.md](PROGRESS.md) for development tracking. **Always keep this file accurate and up-to-date:** mark items as completed when done, move completed items from TODO to Completed, and add a "Recent Work" section for the last 10–15 commits. Never let this file become stale, duplicated, or misleading — it is the primary mechanism for the AI agent to understand what has been done and what remains.
