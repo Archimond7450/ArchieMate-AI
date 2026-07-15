@@ -32,7 +32,7 @@ object ArchieMateApp {
 
     val readinessPromise = Promise[ActorRef[ReadinessTracker.Command]]()
 
-    val rootBehavior = Behaviors.supervise(
+    val rootBehavior = Behaviors.supervise[Nothing](
       Behaviors.setup { ctx =>
         val tracker = ctx.spawn(ReadinessTracker.supervised(), "readiness-tracker")
         readinessPromise.success(tracker)
@@ -40,8 +40,7 @@ object ArchieMateApp {
       }
     ).onFailure[Throwable](SupervisorStrategy.restart)
 
-    val system: ActorSystem[Nothing] =
-      ActorSystem(rootBehavior, "archiemate-system").asInstanceOf[ActorSystem[Nothing]]
+    val system: ActorSystem[Nothing] = ActorSystem(rootBehavior, "archiemate-system")
 
     logger.info("ArchieMate starting on port {}", appConfig.server.port)
 
