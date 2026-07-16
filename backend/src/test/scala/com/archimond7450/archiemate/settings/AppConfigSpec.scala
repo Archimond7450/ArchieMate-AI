@@ -1,22 +1,22 @@
 package com.archimond7450.archiemate.settings
 
 import com.typesafe.config.ConfigFactory
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
-class AppConfigSpec extends AnyFlatSpec with Matchers {
+class AppConfigSpec extends AnyWordSpecLike with Matchers {
 
   "AppConfig" should "load from default application.conf" in {
     val config = ConfigFactory.load()
     val appConfig = AppConfig(config)
 
-    appConfig.server.host shouldBe "0.0.0.0"
-    appConfig.server.port shouldBe 8080
-    appConfig.server.apiVersion shouldBe "v1"
-    appConfig.database.driver shouldBe "org.postgresql.Driver"
-    appConfig.twitch.clientId shouldBe ""
-    appConfig.twitch.clientSecret shouldBe ""
-    appConfig.twitch.redirectUriPostfix shouldBe ""
+    appConfig.server.host shouldEqual "0.0.0.0"
+    appConfig.server.port shouldEqual 8080
+    appConfig.server.apiVersion shouldEqual "v1"
+    appConfig.database.driver shouldEqual "org.postgresql.Driver"
+    appConfig.twitch.clientId shouldEqual ""
+    appConfig.twitch.clientSecret shouldEqual ""
+    appConfig.twitch.redirectUriPostfix shouldEqual ""
   }
 
   it should "respect environment variable overrides" in {
@@ -26,7 +26,7 @@ class AppConfigSpec extends AnyFlatSpec with Matchers {
     """).withFallback(ConfigFactory.load())
 
     val appConfig = AppConfig(overriden)
-    appConfig.server.host shouldBe "127.0.0.1"
-    appConfig.server.port shouldBe 9090
+    appConfig.server.host shouldEqual "127.0.0.1"
+    appConfig.server.port shouldEqual 9090
   }
 }

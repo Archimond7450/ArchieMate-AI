@@ -1,9 +1,9 @@
 package com.archimond7450.archiemate.pages
 
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
-class DocsPageSpec extends AnyFlatSpec with Matchers {
+class DocsPageSpec extends AnyWordSpecLike with Matchers {
 
   "DocsPage" should "have a valid render method" in {
     // DOM-dependent rendering is tested via E2E tests (Playwright)

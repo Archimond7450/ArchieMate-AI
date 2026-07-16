@@ -1,9 +1,9 @@
 package com.archimond7450.archiemate.components
 
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
-class FooterSpec extends AnyFlatSpec with Matchers {
+class FooterSpec extends AnyWordSpecLike with Matchers {
 
   "Footer" should "have a valid render method" in {
     // DOM-dependent rendering is tested via E2E tests (Playwright)

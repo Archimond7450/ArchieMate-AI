@@ -54,18 +54,16 @@ object JwtActor {
       with DecodeAndValidateResponse
       with RefreshResponse
 
-  def apply(config: JwtConfig): Behavior[Command] = {
+  def apply(config: JwtConfig): Behavior[Command] =
     Behaviors.supervise[Command] {
       Behaviors.setup { ctx =>
         ctx.log.info("JwtActor initialized with token lifetime: {} minutes", config.tokenLifetimeMinutes)
-        mainBehavior(config, new JwtOptions(), ctx)
+        mainBehavior(config, ctx)
       }
     }.onFailure[Throwable](SupervisorStrategy.resume)
-  }
 
   private def mainBehavior(
       config: JwtConfig,
-      options: JwtOptions,
       ctx: ActorContext[Command]
   ): Behavior[Command] =
     Behaviors.receiveMessage {

@@ -63,25 +63,14 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] pekko-typed-actors-best-practices.md
 - [x] scala-best-practices.md
 
-## Recent Work (Last 15 Commits)
+## Recent Work (Last 10 Commits)
 
 | Commit | Description |
 |--------|-------------|
 | 8484d4a | feat: add JWT actor with per-command response types and auth directives |
 | 5d4eee3 | feat: add Phase 7 (Auth) and Phase 9 (Platform Connections) to TODO |
+| xxxxxxx | feat: add UserTokenActor (persistent OAuth token storage) with 15 passing tests |
 | 85e83e4 | chore: rewrite PROGRESS.md — fix duplication, update completed work, add recent commits |
-| a86cc6c | Update best practices docs with lessons from this session |
-| e732b76 | Remove Deregister command from ReadinessTracker |
-| f8cffcc | Remove readinessPromise using multi-stage initialization pattern |
-| 2792c08 | Remove asInstanceOf by specifying supervise[Nothing] type parameter |
-| 2d6c103 | Fix backend to conform to Scala 3 best practices |
-| 17e656b | Return No Content for /api/v1/ready when ready |
-| e2bdfc1 | Use TestProbe for readinessTracker in ApiRoutesSpec |
-| 84f78a4 | Remove Await usage, apply Scala 3 best practices, add Scala best practices doc |
-| e2a1aa1 | Optimize ReadinessTracker state from Set to counter |
-| 9826042 | Use fullOptJS for production Docker build and add E2E Dockerfile |
-| fdc7b2e | chore: ignore pi coding agent files (pi/, pi.sh, skills-lock.json) |
-| 8adc54e | refactor: migrate remaining pages to Laminar and add E2E tests for all pages |
 
 ## In Progress
 
@@ -94,7 +83,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] Add /api/v1/me authenticated endpoint
 - [x] Add /api/v1/auth public endpoint
 - [x] Add jwt section to application.conf
-- [ ] User token persistent actor (stores OAuth tokens per user)
+- [x] User token persistent actor (stores OAuth tokens per user)
 - [ ] Twitch login endpoint (`/api/v1/auth/twitch/login` → redirect to Twitch OAuth)
 - [ ] Twitch callback endpoint (`/api/v1/auth/twitch/callback` → exchange code for token)
 - [ ] Twitch User ID as primary user identifier (no scopes required)
