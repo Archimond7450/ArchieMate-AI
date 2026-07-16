@@ -54,7 +54,8 @@ cd .. && docker compose -f docker-compose.e2e.yml down --remove-orphans
 
 ## Configuration
 - `backend/src/main/resources/application.conf` - Main config
-- Environment variables override config values: `SERVER_HOST`, `SERVER_PORT`, `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`
+- Environment variables override config values: `SERVER_HOST`, `SERVER_PORT`, `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`, `JWT_SECRET`, `JWT_TOKEN_LIFETIME_MINUTES`, `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_REDIRECT_URI_POSTFIX`
+- `example.env` — template with all environment variables. **Keep this file accurate and up-to-date** whenever a new env var is added to `application.conf`.
 
 ## Architecture
 - Package: `com.archimond7450.archiemate`
