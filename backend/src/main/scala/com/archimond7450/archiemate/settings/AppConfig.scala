@@ -20,10 +20,17 @@ case class JwtConfig(
     tokenLifetimeMinutes: Int
 )
 
+case class TwitchConfig(
+    clientId: String,
+    clientSecret: String,
+    redirectUriPostfix: String
+)
+
 case class AppConfig(
     server: ServerConfig,
     database: DatabaseConfig,
-    jwt: JwtConfig
+    jwt: JwtConfig,
+    twitch: TwitchConfig
 )
 
 object AppConfig {
@@ -32,6 +39,7 @@ object AppConfig {
     val resolved = config.resolve(ConfigResolveOptions.defaults())
     val serverConf = resolved.getConfig("archiemate.server")
     val dbConf = resolved.getConfig("archiemate.database")
+    val twitchConf = resolved.getConfig("archiemate.twitch")
 
     AppConfig(
       server = ServerConfig(
@@ -48,6 +56,11 @@ object AppConfig {
       jwt = JwtConfig(
         secret = resolveString(resolved.getConfig("archiemate.jwt"), "secret", ""),
         tokenLifetimeMinutes = resolveInt(resolved.getConfig("archiemate.jwt"), "token-lifetime-minutes", 15)
+      ),
+      twitch = TwitchConfig(
+        clientId = resolveString(twitchConf, "client-id", ""),
+        clientSecret = resolveString(twitchConf, "client-secret", ""),
+        redirectUriPostfix = resolveString(twitchConf, "redirect-uri-postfix", "")
       )
     )
   }

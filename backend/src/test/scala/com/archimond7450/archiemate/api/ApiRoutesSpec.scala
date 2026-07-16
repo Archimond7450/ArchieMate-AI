@@ -4,7 +4,7 @@ import com.archimond7450.archiemate.ReadinessTracker
 import com.archimond7450.archiemate.ReadinessTracker.ReadyResponse
 import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
 import com.archimond7450.archiemate.auth.JwtActor
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, JwtConfig, ServerConfig}
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, JwtConfig, ServerConfig, TwitchConfig}
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
 import org.apache.pekko.actor.typed.Scheduler
@@ -34,6 +34,11 @@ class ApiRoutesSpec
     jwt = JwtConfig(
       secret = "test-secret-key-for-jwt-signing-must-be-long-enough",
       tokenLifetimeMinutes = 15
+    ),
+    twitch = TwitchConfig(
+      clientId = "",
+      clientSecret = "",
+      redirectUriPostfix = ""
     )
   )
 

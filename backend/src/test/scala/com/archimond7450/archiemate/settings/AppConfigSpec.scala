@@ -14,6 +14,9 @@ class AppConfigSpec extends AnyFlatSpec with Matchers {
     appConfig.server.port shouldBe 8080
     appConfig.server.apiVersion shouldBe "v1"
     appConfig.database.driver shouldBe "org.postgresql.Driver"
+    appConfig.twitch.clientId shouldBe ""
+    appConfig.twitch.clientSecret shouldBe ""
+    appConfig.twitch.redirectUriPostfix shouldBe ""
   }
 
   it should "respect environment variable overrides" in {

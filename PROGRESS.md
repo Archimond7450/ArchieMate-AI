@@ -63,10 +63,13 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] pekko-typed-actors-best-practices.md
 - [x] scala-best-practices.md
 
-## Recent Work (Last 16 Commits)
+## Recent Work (Last 15 Commits)
 
 | Commit | Description |
 |--------|-------------|
+| 8484d4a | feat: add JWT actor with per-command response types and auth directives |
+| 5d4eee3 | feat: add Phase 7 (Auth) and Phase 9 (Platform Connections) to TODO |
+| 85e83e4 | chore: rewrite PROGRESS.md — fix duplication, update completed work, add recent commits |
 | a86cc6c | Update best practices docs with lessons from this session |
 | e732b76 | Remove Deregister command from ReadinessTracker |
 | f8cffcc | Remove readinessPromise using multi-stage initialization pattern |
@@ -79,68 +82,18 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 | 9826042 | Use fullOptJS for production Docker build and add E2E Dockerfile |
 | fdc7b2e | chore: ignore pi coding agent files (pi/, pi.sh, skills-lock.json) |
 | 8adc54e | refactor: migrate remaining pages to Laminar and add E2E tests for all pages |
-| e1d1398 | chore: update .gitignore to cover .bsp, .metals, .agents, playwright-report, test-results |
-| a54b3f1 | feat: add dark/light mode toggle with mobile menu and comprehensive E2E tests |
-| c3ba1ca | fix: E2E tests run against Docker container instead of Vite dev server |
-| 68a1057 | fix: footer AI model name and verify all tests pass |
 
 ## In Progress
 
 ### Phase 7: Authentication
-- [x] JWT actor (encode, decode, validate, refresh with expiration checking)
-- [x] Auth directives for Pekko HTTP (extract JWT from Authorization header)
+- [x] JWT actor (encode, decode, validate with expiration, refresh)
+- [x] JwtClaim fluent builder for token creation
+- [x] Per-command sealed response traits
+- [x] Auth directives for Pekko HTTP (extract Bearer token from Authorization header)
 - [x] Wire JwtActor into ArchieMateApp and ApiRoutes
 - [x] Add /api/v1/me authenticated endpoint
-- [x] Add application.conf jwt section
-
-### Phase 8: Actor System
-- [ ] Chat message actor
-- [ ] Event dispatcher actor
-- [ ] Command processing actor
-- [ ] Persistence with Pekko Persistence
-- [ ] Cluster support (future)
-
-### Phase 9: Platform Connection Management
-- [ ] Platform connection persistent actor (stores per-user platform connections)
-- [ ] Twitch platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
-- [ ] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
-- [ ] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
-- [ ] Dashboard page with platform connection UI
-- [ ] API endpoints for connection CRUD (`/api/v1/connections/...`)
-
-### Phase 10: Chatbot Features
-- [ ] Command system (`!command` syntax)
-- [ ] Message filtering
-- [ ] User moderation
-- [ ] Custom responses
-- [ ] Statistics and analytics
-
-### Phase 11: Frontend Pages (remaining)
-- [ ] Settings page
-- [ ] Chat viewer component
-
-### Phase 12: Production Hardening
-- [ ] Health check improvements (database connectivity)
-- [ ] Metrics and monitoring
-- [ ] Structured logging
-- [ ] Rate limiting
-- [ ] CORS configuration
-- [ ] API versioning strategy
-- [ ] CI/CD pipeline
-
-### Phase 13: Documentation
-- [ ] API documentation
-- [ ] Architecture decision records
-- [ ] Contributing guide
-- [ ] Deployment guide
-
-## Notes
-
-- All dependencies should be kept at their newest compatible versions
-- TDD approach: write tests before implementation
-- No cookies except session cookie for login
-- REST API versioning: `/api/v[version]/...`
-- Package: `com.archimond7450.archiemate`
+- [x] Add /api/v1/auth public endpoint
+- [x] Add jwt section to application.conf
 - [ ] User token persistent actor (stores OAuth tokens per user)
 - [ ] Twitch login endpoint (`/api/v1/auth/twitch/login` → redirect to Twitch OAuth)
 - [ ] Twitch callback endpoint (`/api/v1/auth/twitch/callback` → exchange code for token)
@@ -148,6 +101,8 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [ ] Token refresh mechanism (auto-refresh on HTTP 401)
 - [ ] Authenticated route middleware / context propagation
 - [ ] Logout endpoint
+
+## TODO
 
 ### Phase 8: Actor System
 - [ ] Chat message actor
