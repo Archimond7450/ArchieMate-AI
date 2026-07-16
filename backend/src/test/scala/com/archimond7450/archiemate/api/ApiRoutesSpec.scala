@@ -3,7 +3,8 @@ package com.archimond7450.archiemate.api
 import com.archimond7450.archiemate.ReadinessTracker
 import com.archimond7450.archiemate.ReadinessTracker.ReadyResponse
 import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, ServerConfig}
+import com.archimond7450.archiemate.auth.JwtActor
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, JwtConfig, ServerConfig}
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
 import org.apache.pekko.actor.typed.Scheduler
@@ -29,6 +30,10 @@ class ApiRoutesSpec
       user = "test",
       password = "test",
       driver = "org.postgresql.Driver"
+    ),
+    jwt = JwtConfig(
+      secret = "test-secret-key-for-jwt-signing-must-be-long-enough",
+      tokenLifetimeMinutes = 15
     )
   )
 
@@ -41,9 +46,14 @@ class ApiRoutesSpec
     TestProbe[ReadinessTracker.Command]("readiness-tracker")
   private val readinessTracker = readinessProbe.ref
 
+  private val jwtProbe: TestProbe[JwtActor.Command] =
+    TestProbe[JwtActor.Command]("jwt-actor")
+  private val jwtActor = jwtProbe.ref
+
   private val apiRoutes = new ApiRoutes(
     testConfig,
     readinessTracker,
+    jwtActor,
     classicSystem
   ).apiRoutes
 
@@ -79,6 +89,22 @@ class ApiRoutesSpec
 
       test ~> check {
         status shouldEqual StatusCodes.ServiceUnavailable
+      }
+    }
+  }
+
+  "GET /api/v1/auth" should {
+    "return OK for public auth endpoint" in {
+      Get("/api/v1/auth") ~> apiRoutes ~> check {
+        status shouldEqual StatusCodes.OK
+      }
+    }
+  }
+
+  "GET /api/v1/me" should {
+    "return 401 when no Authorization header is present" in {
+      Get("/api/v1/me") ~> apiRoutes ~> check {
+        status shouldEqual StatusCodes.Unauthorized
       }
     }
   }

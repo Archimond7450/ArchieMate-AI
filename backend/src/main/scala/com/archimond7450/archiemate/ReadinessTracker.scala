@@ -38,10 +38,10 @@ object ReadinessTracker {
   // Commands to the readiness tracker
   // ----------------------------------------------------------------
 
-  final case class Register(actorRef: ActorRef[Any]) extends Command
+  final case class Register(actorRef: ActorRef[Nothing]) extends Command
   final case class CheckReadiness(replyTo: ActorRef[ReadinessResponse])
       extends Command
-  final case class Ready(actorRef: ActorRef[Any]) extends Command
+  final case class Ready(actorRef: ActorRef[Nothing]) extends Command
 
   // ----------------------------------------------------------------
   // Responses to CheckReadiness (sealed)
@@ -56,8 +56,8 @@ object ReadinessTracker {
   // ----------------------------------------------------------------
 
   private case class TrackerState(
-      registry: Set[ActorRef[Any]] = Set.empty,
-      readySet: Set[ActorRef[Any]] = Set.empty
+      registry: Set[ActorRef[Nothing]] = Set.empty,
+      readySet: Set[ActorRef[Nothing]] = Set.empty
   )
 
 }

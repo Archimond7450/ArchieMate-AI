@@ -3,19 +3,17 @@ package com.archimond7450.archiemate
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Behavior, SupervisorStrategy}
 import com.archimond7450.archiemate.api.ApiRoutes
+import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.settings.*
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.pekko.actor.ClassicActorSystemProvider
 import org.apache.pekko.http.scaladsl.Http
-import org.slf4j.{Logger, LoggerFactory}
 
 import scala.util.{Failure, Success}
 import scala.concurrent.duration.*
 import scala.concurrent.ExecutionContext
 
 object ArchieMateApp {
-
-  private val logger: Logger = LoggerFactory.getLogger(classOf[ArchieMateApp.type])
 
   sealed trait Command
   private case object StartHttp extends Command
@@ -30,11 +28,14 @@ object ArchieMateApp {
     Behaviors.supervise[Command] {
       Behaviors.setup { ctx =>
         given ExecutionContext = scala.concurrent.ExecutionContext.global
-        tracker ! ReadinessTracker.Register(ctx.self.asInstanceOf[ActorRef[Any]])
+        tracker ! ReadinessTracker.Register(ctx.self.asInstanceOf[ActorRef[Nothing]])
         ctx.self ! StartHttp
         withHttp(tracker, appConfig, classicSystem)
       }
     }.onFailure[Throwable](SupervisorStrategy.restart)
+
+  private def createJwtActor(appConfig: AppConfig): Behavior[JwtActor.Command] =
+    Behaviors.supervise(JwtActor(appConfig.jwt)).onFailure[Throwable](SupervisorStrategy.resume)
 
   private def withHttp(
       tracker: ActorRef[ReadinessTracker.Command],
@@ -43,9 +44,10 @@ object ArchieMateApp {
   )(using ExecutionContext): Behavior[Command] =
     Behaviors.setup { ctx =>
       given ClassicActorSystemProvider = classicSystem
+      val jwtActor = ctx.spawn(createJwtActor(appConfig), "jwt-actor")
       Behaviors.receiveMessage {
         case StartHttp =>
-          val apiRoutes = new ApiRoutes(appConfig, tracker, classicSystem.classicSystem)
+          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, classicSystem.classicSystem)
           val bindingFuture = Http().newServerAt(appConfig.server.host, appConfig.server.port).bind(apiRoutes.apiRoutes)
           bindingFuture.onComplete {
             case scala.util.Success(binding) =>
@@ -58,7 +60,7 @@ object ArchieMateApp {
         case HttpBound(binding) =>
           ctx.log.info("ArchieMate HTTP bound to {}", binding.localAddress)
           binding.addToCoordinatedShutdown(10.seconds)(classicSystem.classicSystem)
-          tracker ! ReadinessTracker.Ready(ctx.self.asInstanceOf[ActorRef[Any]])
+          tracker ! ReadinessTracker.Ready(ctx.self.asInstanceOf[ActorRef[Nothing]])
           ready(tracker)
 
         case Stop =>

@@ -50,6 +50,8 @@ lazy val backend = project
       "io.circe" %% "circe-parser" % "0.14.14",
       // Config
       "com.typesafe" % "config" % "1.4.3",
+      // JWT
+      "com.github.jwt-scala" %% "jwt-circe" % "11.0.4",
       // Logging
       "ch.qos.logback" % "logback-classic" % "1.5.18",
       // Testcontainers for PostgreSQL in tests (add when needed)

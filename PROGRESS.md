@@ -86,10 +86,61 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## In Progress
 
-## TODO
-
 ### Phase 7: Authentication
-- [ ] HTTP request actor (dedicated Pekko actor for outbound HTTP calls)
+- [x] JWT actor (encode, decode, validate, refresh with expiration checking)
+- [x] Auth directives for Pekko HTTP (extract JWT from Authorization header)
+- [x] Wire JwtActor into ArchieMateApp and ApiRoutes
+- [x] Add /api/v1/me authenticated endpoint
+- [x] Add application.conf jwt section
+
+### Phase 8: Actor System
+- [ ] Chat message actor
+- [ ] Event dispatcher actor
+- [ ] Command processing actor
+- [ ] Persistence with Pekko Persistence
+- [ ] Cluster support (future)
+
+### Phase 9: Platform Connection Management
+- [ ] Platform connection persistent actor (stores per-user platform connections)
+- [ ] Twitch platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
+- [ ] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
+- [ ] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
+- [ ] Dashboard page with platform connection UI
+- [ ] API endpoints for connection CRUD (`/api/v1/connections/...`)
+
+### Phase 10: Chatbot Features
+- [ ] Command system (`!command` syntax)
+- [ ] Message filtering
+- [ ] User moderation
+- [ ] Custom responses
+- [ ] Statistics and analytics
+
+### Phase 11: Frontend Pages (remaining)
+- [ ] Settings page
+- [ ] Chat viewer component
+
+### Phase 12: Production Hardening
+- [ ] Health check improvements (database connectivity)
+- [ ] Metrics and monitoring
+- [ ] Structured logging
+- [ ] Rate limiting
+- [ ] CORS configuration
+- [ ] API versioning strategy
+- [ ] CI/CD pipeline
+
+### Phase 13: Documentation
+- [ ] API documentation
+- [ ] Architecture decision records
+- [ ] Contributing guide
+- [ ] Deployment guide
+
+## Notes
+
+- All dependencies should be kept at their newest compatible versions
+- TDD approach: write tests before implementation
+- No cookies except session cookie for login
+- REST API versioning: `/api/v[version]/...`
+- Package: `com.archimond7450.archiemate`
 - [ ] User token persistent actor (stores OAuth tokens per user)
 - [ ] Twitch login endpoint (`/api/v1/auth/twitch/login` → redirect to Twitch OAuth)
 - [ ] Twitch callback endpoint (`/api/v1/auth/twitch/callback` → exchange code for token)

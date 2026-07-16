@@ -18,6 +18,31 @@ final case class CheckReadiness(replyTo: ActorRef[ReadinessResponse]) extends Co
 final case object Ready extends Command
 ```
 
+## Per-Command Response Traits
+Each command must have its own sealed response trait. Case classes can extend multiple traits — this avoids duplication while keeping the type system precise. Callers create `TestProbe[SpecificResponse]` to get exhaustive match checking on only the relevant responses.
+
+```scala
+object MyActor {
+  sealed trait Command
+  final case class Start(replyTo: ActorRef[StartResponse]) extends Command
+  final case class Stop(replyTo: ActorRef[StopResponse]) extends Command
+
+  // Common supertype
+  sealed trait Response
+
+  // One trait per command
+  sealed trait StartResponse extends Response
+  sealed trait StopResponse extends Response
+
+  // Case classes extend their own trait; shared types extend all
+  final case class StartSuccess(id: String) extends StartResponse
+  final case class StopSuccess(flushed: Boolean) extends StopResponse
+  final case class Error(message: String) extends StartResponse with StopResponse
+}
+```
+
+This prevents callers matching on a `Start` response from accidentally seeing `StopSuccess` as a possible case. The compiler enforces exhaustiveness only over the responses that can actually be received for that command.
+
 ## actorName Convention
 
 The companion `object` must contain a `private val actorName`:
@@ -129,14 +154,13 @@ Behaviors.supervise[Nothing] {
 
 ## ActorRef Invariance
 
-`ActorRef` is **invariant** in its type parameter: `ActorRef[SubType]` is **not** a subtype of `ActorRef[SuperType]`. When you need to pass an actor ref to a registry that expects a broader type, use `ActorRef[Any]`:
+`ActorRef` is **invariant** in its type parameter: `ActorRef[SubType]` is **not** a subtype of `ActorRef[SuperType]`. When passing a ref to a registry that stores but never invokes it, use `ActorRef[Nothing]` — the bottom type communicates "this ref is never sent messages":
 
 ```scala
-// If the registry accepts ActorRef[Any], cast explicitly
-tracker ! ReadinessTracker.Register(ctx.self.asInstanceOf[ActorRef[Any]])
+tracker ! ReadinessTracker.Register(ctx.self.asInstanceOf[ActorRef[Nothing]])
 ```
 
-Do not rely on subtyping — the compiler will reject it.
+`ActorRef[Nothing]` is preferred over `ActorRef[Any]` for registries that only compare refs for equality (e.g., a readiness tracker). Only use `ActorRef[Any]` when the registry genuinely needs to send messages of unknown type to the stored refs.
 
 ## pipeToSelf vs onComplete
 
@@ -164,6 +188,34 @@ Behaviors.supervise(actor()).onFailure[Throwable](SupervisorStrategy.resume)
 ```
 
 This ensures the actor is restarted without losing its internal state, since state is carried in behavior parameters rather than mutable fields.
+
+## Logging
+
+**Always use the Actor Context's `log` method — never `LoggerFactory`.** The context logger is wired to Pekko's structured logging infrastructure, includes the actor's path in every log line, and respects the actor's log level configuration.
+
+Extract the context in `Behaviors.setup` and pass it to `mainBehavior`:
+
+```scala
+def apply(config: MyConfig): Behavior[Command] = {
+  Behaviors.setup { ctx =>
+    ctx.log.info("Actor initialized")
+    mainBehavior(config, ctx)
+  }
+}
+
+private def mainBehavior(
+    config: MyConfig,
+    ctx: ActorContext[Command]
+): Behavior[Command] =
+  Behaviors.receiveMessage {
+    case SomeCommand =>
+      ctx.log.debug("Processing SomeCommand")
+      Behaviors.same
+  }
+}
+```
+
+Never import or use `org.slf4j.LoggerFactory` in actor code.
 
 ## No Await
 

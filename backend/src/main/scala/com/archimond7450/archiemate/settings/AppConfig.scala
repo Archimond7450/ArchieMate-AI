@@ -15,9 +15,15 @@ case class DatabaseConfig(
     driver: String
 )
 
+case class JwtConfig(
+    secret: String,
+    tokenLifetimeMinutes: Int
+)
+
 case class AppConfig(
     server: ServerConfig,
-    database: DatabaseConfig
+    database: DatabaseConfig,
+    jwt: JwtConfig
 )
 
 object AppConfig {
@@ -38,6 +44,10 @@ object AppConfig {
         user = resolveString(dbConf, "user", ""),
         password = resolveString(dbConf, "password", ""),
         driver = resolveString(dbConf, "driver", "org.postgresql.Driver")
+      ),
+      jwt = JwtConfig(
+        secret = resolveString(resolved.getConfig("archiemate.jwt"), "secret", ""),
+        tokenLifetimeMinutes = resolveInt(resolved.getConfig("archiemate.jwt"), "token-lifetime-minutes", 15)
       )
     )
   }
