@@ -4,7 +4,7 @@ import com.archimond7450.archiemate.ReadinessTracker
 import com.archimond7450.archiemate.ReadinessTracker.ReadyResponse
 import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
 import com.archimond7450.archiemate.auth.JwtActor
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, JwtConfig, ServerConfig, TwitchConfig}
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, ServerConfig, TwitchConfig}
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
 import org.apache.pekko.actor.typed.Scheduler
@@ -39,6 +39,10 @@ class ApiRoutesSpec
       clientId = "",
       clientSecret = "",
       redirectUriPostfix = ""
+    ),
+    httpClient = HttpClientConfig(
+      maxConnections = 10,
+      maxIdleTimeoutMinutes = 60
     )
   )
 

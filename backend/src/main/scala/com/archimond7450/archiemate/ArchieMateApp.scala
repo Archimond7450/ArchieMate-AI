@@ -1,19 +1,25 @@
 package com.archimond7450.archiemate
 
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.ClassicActorSystemProvider
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
-import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Behavior, SupervisorStrategy}
+import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import org.apache.pekko.actor.typed.ActorSystem as TypedActorSystem
+import org.apache.pekko.http.scaladsl.Http
 import com.archimond7450.archiemate.api.ApiRoutes
 import com.archimond7450.archiemate.auth.JwtActor
+import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.*
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.pekko.actor.ClassicActorSystemProvider
-import org.apache.pekko.http.scaladsl.Http
 
 import scala.util.{Failure, Success}
 import scala.concurrent.duration.*
 import scala.concurrent.ExecutionContext
 
 object ArchieMateApp {
+
+  private val mediatorName = "archie-mate-mediator"
+  private val httpClientName = "http-client-actor"
 
   sealed trait Command
   private case object StartHttp extends Command
@@ -30,7 +36,7 @@ object ArchieMateApp {
         given ExecutionContext = scala.concurrent.ExecutionContext.global
         tracker ! ReadinessTracker.Register(ctx.self.asInstanceOf[ActorRef[Nothing]])
         ctx.self ! StartHttp
-        withHttp(tracker, appConfig, classicSystem)
+        withHttp(ctx, tracker, appConfig, classicSystem)
       }
     }.onFailure[Throwable](SupervisorStrategy.restart)
 
@@ -38,13 +44,23 @@ object ArchieMateApp {
     Behaviors.supervise(JwtActor(appConfig.jwt)).onFailure[Throwable](SupervisorStrategy.resume)
 
   private def withHttp(
+      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[ArchieMateApp.Command],
       tracker: ActorRef[ReadinessTracker.Command],
       appConfig: AppConfig,
       classicSystem: ClassicActorSystemProvider
   )(using ExecutionContext): Behavior[Command] =
-    Behaviors.setup { ctx =>
+    Behaviors.setup { innerCtx =>
       given ClassicActorSystemProvider = classicSystem
-      val jwtActor = ctx.spawn(createJwtActor(appConfig), "jwt-actor")
+      val httpClient = innerCtx.spawn(
+        Behaviors.supervise(HttpClientActor(classicSystem, ConfigFactory.load())).onFailure[Throwable](SupervisorStrategy.resume),
+        httpClientName
+      )
+      val jwtActor = innerCtx.spawn(createJwtActor(appConfig), "jwt-actor")
+      val mediator = innerCtx.spawn(
+        ArchieMateMediator.supervised(httpClient),
+        mediatorName
+      )
+
       Behaviors.receiveMessage {
         case StartHttp =>
           val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, classicSystem.classicSystem)
@@ -84,13 +100,13 @@ object ArchieMateApp {
       def classicSystem = org.apache.pekko.actor.ActorSystem("archiemate-classic", config)
     }
 
-    val tracker = ActorSystem(
+    val tracker = TypedActorSystem(
       ReadinessTracker.supervised(),
       "readiness-tracker"
     )
 
     val rootBehavior = ArchieMateApp(tracker, appConfig, classicSystem)
-    val system = ActorSystem(rootBehavior, "archiemate-system")
+    val system = TypedActorSystem(rootBehavior, "archiemate-system")
 
     Runtime.getRuntime.addShutdownHook(new Thread(() => {
       system.terminate()

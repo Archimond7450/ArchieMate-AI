@@ -26,11 +26,17 @@ case class TwitchConfig(
     redirectUriPostfix: String
 )
 
+case class HttpClientConfig(
+    maxConnections: Int,
+    maxIdleTimeoutMinutes: Int
+)
+
 case class AppConfig(
     server: ServerConfig,
     database: DatabaseConfig,
     jwt: JwtConfig,
-    twitch: TwitchConfig
+    twitch: TwitchConfig,
+    httpClient: HttpClientConfig
 )
 
 object AppConfig {
@@ -61,6 +67,10 @@ object AppConfig {
         clientId = resolveString(twitchConf, "client-id", ""),
         clientSecret = resolveString(twitchConf, "client-secret", ""),
         redirectUriPostfix = resolveString(twitchConf, "redirect-uri-postfix", "")
+      ),
+      httpClient = HttpClientConfig(
+        maxConnections = resolveInt(resolved.getConfig("archiemate.http-client"), "max-connections", 10),
+        maxIdleTimeoutMinutes = resolveInt(resolved.getConfig("archiemate.http-client"), "max-idle-timeout-minutes", 60)
       )
     )
   }

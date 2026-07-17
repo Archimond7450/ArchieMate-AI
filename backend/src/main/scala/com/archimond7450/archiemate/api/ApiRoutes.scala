@@ -40,6 +40,7 @@ class ApiRoutes(
           get {
             given Scheduler = classicActorSystem.toTyped.scheduler
             given Timeout = Timeout(3.seconds)
+            given ExecutionContext = scala.concurrent.ExecutionContext.global
             onSuccess(
               readinessTracker.ask[ReadinessTracker.ReadinessResponse](ref =>
                 ReadinessTracker.CheckReadiness(ref)

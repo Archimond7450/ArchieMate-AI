@@ -1,16 +1,18 @@
 package com.archimond7450.archiemate.pages
 
-import org.scalatest.matchers.should.Matchers
+import org.scalatest.matchers.should.Matchers._
 import org.scalatest.wordspec.AnyWordSpecLike
 
-class AboutPageSpec extends AnyWordSpecLike with Matchers {
+class AboutPageSpec extends AnyWordSpecLike {
 
-  "AboutPage" should "have a valid render method" in {
-    // DOM-dependent rendering is tested via E2E tests (Playwright)
-    // This test verifies the method exists and is callable
-    val renderMethod = () => AboutPage.render()
-    // The actual rendering requires a DOM environment (browser/jsdom)
-    // which is handled by the E2E test suite
-    succeed
+  "AboutPage" should {
+    "have a valid render method" in {
+      // DOM-dependent rendering is tested via E2E tests (Playwright)
+      // This test verifies the method exists and is callable
+      val renderMethod = () => AboutPage.render()
+      // The actual rendering requires a DOM environment (browser/jsdom)
+      // which is handled by the E2E test suite
+      succeed
+    }
   }
 }

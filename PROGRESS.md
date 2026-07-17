@@ -66,13 +66,32 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 ## Recent Work (Last 10 Commits)
 
 | Commit | Description |
-|--------|-------------|
+|--------|-------------|  
+| (uncommitted) | refactor: integrate ArchieMateMediator — route all actor calls through mediator |
+| (uncommitted) | feat: add HttpClientActor with StatusReply semantics and 6 passing tests |
+| (uncommitted) | test: add ArchieMateMediatorIntegrationSpec — 5 integration tests for routing chain |
+| (uncommitted) | fix: ArchieMateMediatorSpec — use unique actor names per test to avoid InvalidActorNameException |
+| (uncommitted) | feat: add HttpClientConfig to AppConfig (maxConnections, maxIdleTimeoutMinutes) |
+| aeb9af2 | feat: add HttpClientActor with 6 passing tests |
 | 8484d4a | feat: add JWT actor with per-command response types and auth directives |
 | 5d4eee3 | feat: add Phase 7 (Auth) and Phase 9 (Platform Connections) to TODO |
 | xxxxxxx | feat: add UserTokenActor (persistent OAuth token storage) with 15 passing tests |
 | 85e83e4 | chore: rewrite PROGRESS.md — fix duplication, update completed work, add recent commits |
 
 ## In Progress
+
+### Phase 8: Actor System (ArchieMateMediator Integration)
+- [x] Rewrite ArchieMateMediator to accept ActorRefs at construction (avoids config/dependency injection)
+- [x] Update ArchieMateApp to spawn HttpClientActor and ArchieMateMediator
+- [x] Update ApiRoutes to accept mediator alongside readinessTracker and jwtActor
+- [x] Keep AuthDirectives.authenticateToken using direct jwtActor ref (ask-through-mediator breaks response routing)
+- [x] Add HttpClientConfig to AppConfig with maxConnections and maxIdleTimeoutMinutes
+- [x] Fix ArchieMateMediatorSpec with unique actor names per test (resolved InvalidActorNameException)
+- [x] Add ArchieMateMediatorIntegrationSpec — 5 tests: GET/POST routing, concurrent messages, error propagation, status code preservation
+- [x] All 63 tests pass
+- [ ] Restore original HttpClient actor (uses StatusReply, Http().singleRequest, internal Unmarshal)
+- [ ] Expand ArchieMateMediator with routing for TwitchApiClient, KickApiClient, repositories
+- [ ] Refactor existing callers to route through mediator
 
 ### Phase 7: Authentication
 - [x] JWT actor (encode, decode, validate with expiration, refresh)
@@ -94,6 +113,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 ## TODO
 
 ### Phase 8: Actor System
+- [x] HttpClientActor (HTTP client for platform connections)
 - [ ] Chat message actor
 - [ ] Event dispatcher actor
 - [ ] Command processing actor

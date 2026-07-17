@@ -1,5 +1,6 @@
 package com.archimond7450.archiemate.auth
 
+import com.archimond7450.archiemate.auth.JwtActor.{DecodeAndValidateSuccess, DecodeAndValidateResponse}
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.{*, given}
@@ -15,11 +16,11 @@ object AuthDirectives {
       token: String,
       jwtActor: ActorRef[JwtActor.Command]
   )(using scheduler: Scheduler, timeout: Timeout, ec: ExecutionContext): Future[Either[Throwable, String]] = {
-    val f: Future[JwtActor.Response] = jwtActor.ask[JwtActor.Response](ref =>
+    val f: Future[DecodeAndValidateResponse] = jwtActor.ask[DecodeAndValidateResponse](ref =>
       JwtActor.DecodeAndValidate(token, ref)
     )
     f.map {
-      case JwtActor.DecodeAndValidateSuccess(userId, _) =>
+      case DecodeAndValidateSuccess(userId, _) =>
         Right(userId)
       case JwtActor.Error(message) =>
         Left(new RuntimeException(message))
