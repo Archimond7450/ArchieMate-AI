@@ -67,6 +67,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 | Commit | Description |
 |--------|-------------|  
+| b6ecbc6 | feat: add Twitch OAuth flow with /auth/twitch/login and /auth/twitch/callback |
 | 4a89ba0 | feat: integrate ArchieMateMediator with HttpClientActor and complete Phase 8 actor system |
 | aeb9af2 | feat: add HttpClientActor with 6 passing tests |
 | 8484d4a | feat: add JWT actor with per-command response types and auth directives |
@@ -88,7 +89,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] HttpClientActor with StatusReply, Http().singleRequest, internal Unmarshal
 - [x] All Phase 8 items complete — mediator infrastructure ready for platform actors
 
-### Phase 7: Authentication
+### Phase 7: Authentication ✅ COMPLETE
 - [x] JWT actor (encode, decode, validate with expiration, refresh)
 - [x] JwtClaim fluent builder for token creation
 - [x] Per-command sealed response traits
@@ -97,6 +98,10 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] Add /api/v1/me authenticated endpoint
 - [x] Add /api/v1/auth public endpoint
 - [x] Add jwt section to application.conf
+- [x] User token persistent actor (stores OAuth tokens per user)
+- [x] Twitch OAuth actor (state generation, code exchange, user fetch)
+- [x] /auth/twitch/login endpoint (redirect to Twitch OAuth)
+- [x] /auth/twitch/callback endpoint (exchange code, return tokens)
 - [x] User token persistent actor (stores OAuth tokens per user)
 - [ ] Twitch login endpoint (`/api/v1/auth/twitch/login` → redirect to Twitch OAuth)
 - [ ] Twitch callback endpoint (`/api/v1/auth/twitch/callback` → exchange code for token)
@@ -152,7 +157,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## Suggested Next Steps
 
-1. **Phase 7 - Twitch OAuth** (highest priority): Implement Twitch login/callback endpoints to enable user authentication via Twitch. This is the foundation for all platform-specific features.
+1. **Phase 7 - Complete Auth flow**: Wire up UserTokenActor to store Twitch tokens after callback, and issue JWT for the session. This completes the auth flow.
 2. **Phase 9 - Platform Connections**: Add platform connection actors (Twitch, Kick, YouTube) and dashboard UI for managing connections.
 3. **Phase 10 - Chatbot Features**: Implement the core chatbot command system.
 
