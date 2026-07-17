@@ -6,8 +6,11 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
 import org.apache.pekko.actor.typed.ActorSystem as TypedActorSystem
 import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.server.Directives._enhanceRouteWithConcatenation
 import com.archimond7450.archiemate.api.ApiRoutes
+import com.archimond7450.archiemate.auth.AuthRoutes
 import com.archimond7450.archiemate.auth.JwtActor
+import com.archimond7450.archiemate.auth.TwitchOAuthActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.*
 import com.typesafe.config.{Config, ConfigFactory}
@@ -60,11 +63,17 @@ object ArchieMateApp {
         ArchieMateMediator.supervised(httpClient),
         mediatorName
       )
+      val twitchOAuthActor = innerCtx.spawn(
+        TwitchOAuthActor(appConfig.twitch, mediator),
+        "twitch-oauth-actor"
+      )
 
       Behaviors.receiveMessage {
         case StartHttp =>
           val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, classicSystem.classicSystem)
-          val bindingFuture = Http().newServerAt(appConfig.server.host, appConfig.server.port).bind(apiRoutes.apiRoutes)
+          val authRoutes = new AuthRoutes(appConfig.twitch, twitchOAuthActor, appConfig.twitch.redirectUriPostfix, classicSystem.classicSystem)
+          val combinedRoutes = authRoutes.authRoutes ~ apiRoutes.apiRoutes
+          val bindingFuture = Http().newServerAt(appConfig.server.host, appConfig.server.port).bind(combinedRoutes)
           bindingFuture.onComplete {
             case scala.util.Success(binding) =>
               ctx.self ! HttpBound(binding)

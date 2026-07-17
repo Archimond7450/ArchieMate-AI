@@ -38,7 +38,8 @@ class ApiRoutesSpec
     twitch = TwitchConfig(
       clientId = "",
       clientSecret = "",
-      redirectUriPostfix = ""
+      redirectUriPostfix = "",
+      scopes = List.empty
     ),
     httpClient = HttpClientConfig(
       maxConnections = 10,

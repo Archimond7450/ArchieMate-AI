@@ -1,6 +1,7 @@
 package com.archimond7450.archiemate.settings
 
 import com.typesafe.config.{Config, ConfigResolveOptions}
+import scala.jdk.CollectionConverters._
 
 case class ServerConfig(
     host: String,
@@ -23,7 +24,8 @@ case class JwtConfig(
 case class TwitchConfig(
     clientId: String,
     clientSecret: String,
-    redirectUriPostfix: String
+    redirectUriPostfix: String,
+    scopes: List[String]
 )
 
 case class HttpClientConfig(
@@ -66,7 +68,8 @@ object AppConfig {
       twitch = TwitchConfig(
         clientId = resolveString(twitchConf, "client-id", ""),
         clientSecret = resolveString(twitchConf, "client-secret", ""),
-        redirectUriPostfix = resolveString(twitchConf, "redirect-uri-postfix", "")
+        redirectUriPostfix = resolveString(twitchConf, "redirect-uri-postfix", ""),
+        scopes = resolveScopes(twitchConf)
       ),
       httpClient = HttpClientConfig(
         maxConnections = resolveInt(resolved.getConfig("archiemate.http-client"), "max-connections", 10),
@@ -85,6 +88,23 @@ object AppConfig {
       if (conf.hasPathOrNull(key)) {
         val value = conf.getString(key)
         if (isUnresolvedSubstitution(value)) default else value
+      } else {
+        default
+      }
+    }
+  }
+
+  private def resolveScopes(conf: Config, key: String = "scopes", default: List[String] = List.empty): List[String] = {
+    val envKey = key.toUpperCase.replace("-", "_")
+    sys.env.get(envKey).filter(_.nonEmpty).map(_.split(",").map(_.trim).toList).getOrElse {
+      if (conf.hasPathOrNull(key)) {
+        if (conf.hasPathOrNull(key) && conf.getValue(key).unwrapped().isInstanceOf[java.util.List[_]]) {
+          conf.getStringList(key).asScala.toList
+        } else {
+          val value = conf.getString(key)
+          if (isUnresolvedSubstitution(value) || value.trim.isEmpty) default
+          else value.split(",").map(_.trim).toList
+        }
       } else {
         default
       }
