@@ -13,6 +13,7 @@ import com.archimond7450.archiemate.ReadinessTracker
 import com.archimond7450.archiemate.auth.AuthDirectives
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.settings.*
+import com.archimond7450.archiemate.twitch.TwitchApiActor
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
@@ -22,6 +23,7 @@ class ApiRoutes(
     config: AppConfig,
     readinessTracker: ActorRef[ReadinessTracker.Command],
     jwtActor: ActorRef[JwtActor.Command],
+    twitchApiActor: ActorRef[TwitchApiActor.Command],
     classicActorSystem: org.apache.pekko.actor.ActorSystem
 ) {
 

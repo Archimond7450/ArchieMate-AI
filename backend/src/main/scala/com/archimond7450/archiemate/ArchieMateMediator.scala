@@ -32,7 +32,7 @@ object ArchieMateMediator {
 
   /** Send a prepared HTTP request via HttpRequestActor (typed decode).
     */
-  final case class SendHttpRequest(cmd: HttpRequestActor.Command)
+  final case class SendHttpRequest[T](cmd: HttpRequestActor.Request[T])
       extends Command
 
   private case class State(

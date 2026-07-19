@@ -1,6 +1,5 @@
 package com.archimond7450.archiemate.twitch
 
-import com.archimond7450.archiemate.ArchieMateMediator
 import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.settings.TwitchConfig
 import com.archimond7450.archiemate.user.UserTokenRegistry
@@ -8,7 +7,6 @@ import com.archimond7450.archiemate.user.UserTokenRegistry.{*, given}
 import io.circe.Decoder
 import io.circe.parser.decode
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
-import org.apache.pekko.actor.typed.scaladsl.AskPattern.{*, given}
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.http.scaladsl.model.HttpMethods
@@ -44,6 +42,9 @@ object TwitchApiActor {
   // ----------------------------------------------------------------
 
   sealed trait Command
+
+  /** Internal command to signal HTTP response received. */
+  private case class HttpRequestReply(reply: StatusReply[Any]) extends Command
 
   /** Refresh an access token using its refresh token. */
   final case class RefreshToken(
@@ -127,17 +128,20 @@ object TwitchApiActor {
       displayName: String
   )
 
+  private object TwitchUserInner {
+    implicit val decoder: Decoder[TwitchUserInner] = Decoder.forProduct3(
+      "id",
+      "login",
+      "display_name"
+    )(TwitchUserInner.apply)
+  }
+
   private object TwitchUserList {
     implicit val decoder: Decoder[TwitchUserList] = Decoder.instance { c =>
       for {
         data <- c.downField("data").as[List[TwitchUserInner]]
       } yield TwitchUserList(data)
     }
-  }
-
-  private object TwitchUserInner {
-    def decode(str: String): Either[Throwable, TwitchUserInner] =
-      decode[TwitchUserInner](str).left.map(_.getMessage)
   }
 
   // ----------------------------------------------------------------
@@ -153,9 +157,10 @@ object TwitchApiActor {
 
   def apply(
       config: TwitchConfig,
-      mediator: ActorRef[ArchieMateMediator.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
       userTokenRegistry: ActorRef[UserTokenRegistry.Command],
-      helixBaseUrl: String = DefaultHelixBaseUrl
+      helixBaseUrl: String = DefaultHelixBaseUrl,
+      authBaseUrl: String = DefaultAuthBaseUrl
   ): Behavior[Command] =
     Behaviors.supervise[Command] {
       Behaviors.setup { ctx =>
@@ -165,9 +170,10 @@ object TwitchApiActor {
         )
         mainBehavior(
           config,
-          mediator,
+          httpRequestActor,
           userTokenRegistry,
-          helixBaseUrl
+          helixBaseUrl,
+          authBaseUrl
         )(using
           ctx,
           scheduler = ctx.system.scheduler,
@@ -183,9 +189,10 @@ object TwitchApiActor {
 
   private def mainBehavior(
       config: TwitchConfig,
-      mediator: ActorRef[ArchieMateMediator.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
       userTokenRegistry: ActorRef[UserTokenRegistry.Command],
-      helixBaseUrl: String
+      helixBaseUrl: String,
+      authBaseUrl: String
   )(using
       ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
       scheduler: Scheduler,
@@ -195,19 +202,19 @@ object TwitchApiActor {
     Behaviors.withMdc(Map("actor" -> actorName))(
       Behaviors.receiveMessage {
         case refresh: RefreshToken =>
-          refreshToken(config, refresh.refreshToken, refresh.replyTo, mediator)
+          refreshToken(config, refresh.refreshToken, refresh.replyTo, httpRequestActor, authBaseUrl)
           Behaviors.same
 
         case getUser: GetUserById =>
-          getUserById(config, getUser.userId, getUser.accessToken, getUser.replyTo, mediator, helixBaseUrl)
+          getUserById(config, getUser.userId, getUser.accessToken, getUser.replyTo, httpRequestActor, helixBaseUrl)
           Behaviors.same
 
-        case getCurrentUser: GetCurrentUser =>
-          getCurrentUser(config, getCurrentUser.accessToken, getCurrentUser.replyTo, mediator, helixBaseUrl)
+        case getCurrentUserCmd: GetCurrentUser =>
+          getCurrentUser(config, getCurrentUserCmd.accessToken, getCurrentUserCmd.replyTo, httpRequestActor, helixBaseUrl)
           Behaviors.same
 
-        case getUserByLogin: GetUserByLogin =>
-          getUserByLogin(config, getUserByLogin.loginName, getUserByLogin.accessToken, getUserByLogin.replyTo, mediator, helixBaseUrl)
+        case getUserByLoginCmd: GetUserByLogin =>
+          getUserByLogin(config, getUserByLoginCmd.loginName, getUserByLoginCmd.accessToken, getUserByLoginCmd.replyTo, httpRequestActor, helixBaseUrl)
           Behaviors.same
       }
     )
@@ -216,11 +223,31 @@ object TwitchApiActor {
   // Helpers
   // ----------------------------------------------------------------
 
+  private def handleHelixError(
+      err: Throwable,
+      replyTo: ActorRef[TokenResponse],
+      context: String
+  )(using
+      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command]
+  ): Unit = {
+    val isUnauthorized = err.getMessage.toLowerCase.contains("401")
+    if (isUnauthorized) {
+      replyTo ! Error(s"$context: token expired or invalid (HTTP 401)")
+    } else {
+      replyTo ! Error(s"$context: ${err.getMessage}")
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // HTTP Request Handlers
+  // ----------------------------------------------------------------
+
   private def refreshToken(
       config: TwitchConfig,
       refreshToken: String,
       replyTo: ActorRef[TokenResponse],
-      mediator: ActorRef[ArchieMateMediator.Command]
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
+      authBaseUrl: String
   )(using
       ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
       scheduler: Scheduler,
@@ -234,36 +261,32 @@ object TwitchApiActor {
       s"refresh_token=${refreshToken}"
     ).mkString("&")
 
-    val future: Future[StatusReply[TwitchTokenResponse]] = mediator ? { ref =>
-      ArchieMateMediator.SendHttpRequest(
-        HttpRequestActor.Request[TwitchTokenResponse](
-          method = HttpMethods.POST,
-          uri = Uri(s"$DefaultAuthBaseUrl/token"),
-          headers = Seq(
-            RawHeader("Content-Type", "application/x-www-form-urlencoded")
-          ),
-          entity = org.apache.pekko.http.scaladsl.model.HttpEntity(
-            org.apache.pekko.http.scaladsl.model.MediaTypes.`application/x-www-form-urlencoded`,
-            body.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-          ),
-          decode = str => decode[TwitchTokenResponse](str).toTry,
-          replyTo = ref
-        )
-      )
+    val probeRef: ActorRef[StatusReply[Any]] = ctx.messageAdapter[StatusReply[Any]] { statusReply =>
+      statusReply match {
+        case StatusReply.Success(value) =>
+          value match {
+            case resp: TwitchTokenResponse =>
+              replyTo ! TokenRefreshed(resp.accessToken, resp.refreshToken, resp.expiresIn)
+            case _ =>
+              replyTo ! Error(s"Token refresh failed: unexpected response type")
+          }
+        case StatusReply.Error(err) =>
+          replyTo ! Error(s"Token refresh failed: ${err.getMessage}")
+      }
+      HttpRequestReply(statusReply)
     }
 
-    future.onComplete {
-      case scala.util.Success(StatusReply.Success(tokenResp)) =>
-        replyTo ! TokenRefreshed(
-          tokenResp.accessToken,
-          tokenResp.refreshToken,
-          tokenResp.expiresIn
-        )
-      case scala.util.Success(StatusReply.Error(err)) =>
-        replyTo ! Error(s"Token refresh failed: ${err.getMessage}")
-      case scala.util.Failure(ex) =>
-        replyTo ! Error(s"Token refresh failed: ${ex.getMessage}")
-    }(execEc)
+    httpRequestActor ! HttpRequestActor.Request[TwitchTokenResponse](
+      method = HttpMethods.POST,
+      uri = Uri(s"$authBaseUrl/token"),
+      headers = Seq(RawHeader("Content-Type", "application/x-www-form-urlencoded")),
+      entity = org.apache.pekko.http.scaladsl.model.HttpEntity(
+        org.apache.pekko.http.scaladsl.model.MediaTypes.`application/x-www-form-urlencoded`,
+        body.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      ),
+      decode = str => decode[TwitchTokenResponse](str).toTry,
+      replyTo = probeRef
+    )
   }
 
   private def getUserById(
@@ -271,7 +294,7 @@ object TwitchApiActor {
       userId: String,
       accessToken: String,
       replyTo: ActorRef[TokenResponse],
-      mediator: ActorRef[ArchieMateMediator.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
       helixBaseUrl: String
   )(using
       ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
@@ -282,42 +305,42 @@ object TwitchApiActor {
     val query = Uri.Query("id" -> userId)
     val uri = Uri(s"$helixBaseUrl/users").withQuery(query)
 
-    val future: Future[StatusReply[TwitchUserList]] = mediator ? { ref =>
-      ArchieMateMediator.SendHttpRequest(
-        HttpRequestActor.Request[TwitchUserList](
-          method = HttpMethods.GET,
-          uri = uri,
-          headers = Seq(
-            Authorization(org.apache.pekko.http.scaladsl.model.headers.OAuth2BearerToken(accessToken)),
-            RawHeader("Client-Id", config.clientId)
-          ),
-          entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
-          decode = str => decode[TwitchUserList](str).toTry,
-          replyTo = ref
-        )
-      )
+    val probeRef: ActorRef[StatusReply[Any]] = ctx.messageAdapter[StatusReply[Any]] { statusReply =>
+      statusReply match {
+        case StatusReply.Success(value) =>
+          value match {
+            case userList: TwitchUserList =>
+              userList.data.headOption match {
+                case Some(tu) => replyTo ! UserFound(tu.id, tu.login, tu.displayName)
+                case None     => replyTo ! Error(s"No user found with ID: $userId")
+              }
+            case _ =>
+              replyTo ! Error(s"Get user by ID ($userId): unexpected response type")
+          }
+        case StatusReply.Error(err) =>
+          handleHelixError(err, replyTo, s"Get user by ID ($userId)")
+      }
+      HttpRequestReply(statusReply)
     }
 
-    future.onComplete {
-      case scala.util.Success(StatusReply.Success(userList)) =>
-        userList.data.headOption match {
-          case Some(tu) =>
-            replyTo ! UserFound(tu.id, tu.login, tu.displayName)
-          case None =>
-            replyTo ! Error(s"No user found with ID: $userId")
-        }
-      case scala.util.Success(StatusReply.Error(err)) =>
-        handleHelixError(err, replyTo, s"Get user by ID ($userId)")
-      case scala.util.Failure(ex) =>
-        replyTo ! Error(s"Get user by ID failed: ${ex.getMessage}")
-    }(execEc)
+    httpRequestActor ! HttpRequestActor.Request[TwitchUserList](
+      method = HttpMethods.GET,
+      uri = uri,
+      headers = Seq(
+        Authorization(org.apache.pekko.http.scaladsl.model.headers.OAuth2BearerToken(accessToken)),
+        RawHeader("Client-Id", config.clientId)
+      ),
+      entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
+      decode = str => decode[TwitchUserList](str).toTry,
+      replyTo = probeRef
+    )
   }
 
   private def getCurrentUser(
       config: TwitchConfig,
       accessToken: String,
       replyTo: ActorRef[TokenResponse],
-      mediator: ActorRef[ArchieMateMediator.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
       helixBaseUrl: String
   )(using
       ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
@@ -328,34 +351,32 @@ object TwitchApiActor {
     val query = Uri.Query("oauth_token" -> accessToken)
     val uri = Uri(s"$helixBaseUrl/users").withQuery(query)
 
-    val future: Future[StatusReply[TwitchUserList]] = mediator ? { ref =>
-      ArchieMateMediator.SendHttpRequest(
-        HttpRequestActor.Request[TwitchUserList](
-          method = HttpMethods.GET,
-          uri = uri,
-          headers = Seq(
-            RawHeader("Client-Id", config.clientId)
-          ),
-          entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
-          decode = str => decode[TwitchUserList](str).toTry,
-          replyTo = ref
-        )
-      )
+    val probeRef: ActorRef[StatusReply[Any]] = ctx.messageAdapter[StatusReply[Any]] { statusReply =>
+      statusReply match {
+        case StatusReply.Success(value) =>
+          value match {
+            case userList: TwitchUserList =>
+              userList.data.headOption match {
+                case Some(tu) => replyTo ! UserFound(tu.id, tu.login, tu.displayName)
+                case None     => replyTo ! Error("No current user found")
+              }
+            case _ =>
+              replyTo ! Error("Get current user: unexpected response type")
+          }
+        case StatusReply.Error(err) =>
+          handleHelixError(err, replyTo, "Get current user")
+      }
+      HttpRequestReply(statusReply)
     }
 
-    future.onComplete {
-      case scala.util.Success(StatusReply.Success(userList)) =>
-        userList.data.headOption match {
-          case Some(tu) =>
-            replyTo ! UserFound(tu.id, tu.login, tu.displayName)
-          case None =>
-            replyTo ! Error("No current user found")
-        }
-      case scala.util.Success(StatusReply.Error(err)) =>
-        handleHelixError(err, replyTo, "Get current user")
-      case scala.util.Failure(ex) =>
-        replyTo ! Error(s"Get current user failed: ${ex.getMessage}")
-    }(execEc)
+    httpRequestActor ! HttpRequestActor.Request[TwitchUserList](
+      method = HttpMethods.GET,
+      uri = uri,
+      headers = Seq(RawHeader("Client-Id", config.clientId)),
+      entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
+      decode = str => decode[TwitchUserList](str).toTry,
+      replyTo = probeRef
+    )
   }
 
   private def getUserByLogin(
@@ -363,7 +384,7 @@ object TwitchApiActor {
       loginName: String,
       accessToken: String,
       replyTo: ActorRef[TokenResponse],
-      mediator: ActorRef[ArchieMateMediator.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
       helixBaseUrl: String
   )(using
       ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
@@ -374,50 +395,35 @@ object TwitchApiActor {
     val query = Uri.Query("login" -> loginName)
     val uri = Uri(s"$helixBaseUrl/users").withQuery(query)
 
-    val future: Future[StatusReply[TwitchUserList]] = mediator ? { ref =>
-      ArchieMateMediator.SendHttpRequest(
-        HttpRequestActor.Request[TwitchUserList](
-          method = HttpMethods.GET,
-          uri = uri,
-          headers = Seq(
-            Authorization(org.apache.pekko.http.scaladsl.model.headers.OAuth2BearerToken(accessToken)),
-            RawHeader("Client-Id", config.clientId)
-          ),
-          entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
-          decode = str => decode[TwitchUserList](str).toTry,
-          replyTo = ref
-        )
-      )
+    val probeRef: ActorRef[StatusReply[Any]] = ctx.messageAdapter[StatusReply[Any]] { statusReply =>
+      statusReply match {
+        case StatusReply.Success(value) =>
+          value match {
+            case userList: TwitchUserList =>
+              userList.data.headOption match {
+                case Some(tu) => replyTo ! UserFound(tu.id, tu.login, tu.displayName)
+                case None     => replyTo ! Error(s"No user found with login: $loginName")
+              }
+            case _ =>
+              replyTo ! Error(s"Get user by login ($loginName): unexpected response type")
+          }
+        case StatusReply.Error(err) =>
+          handleHelixError(err, replyTo, s"Get user by login ($loginName)")
+      }
+      HttpRequestReply(statusReply)
     }
 
-    future.onComplete {
-      case scala.util.Success(StatusReply.Success(userList)) =>
-        userList.data.headOption match {
-          case Some(tu) =>
-            replyTo ! UserFound(tu.id, tu.login, tu.displayName)
-          case None =>
-            replyTo ! Error(s"No user found with login: $loginName")
-        }
-      case scala.util.Success(StatusReply.Error(err)) =>
-        handleHelixError(err, replyTo, s"Get user by login ($loginName)")
-      case scala.util.Failure(ex) =>
-        replyTo ! Error(s"Get user by login failed: ${ex.getMessage}")
-    }(execEc)
-  }
-
-  private def handleHelixError(
-      err: Throwable,
-      replyTo: ActorRef[TokenResponse],
-      context: String
-  ): Unit = {
-    // Check if this is a 401 Unauthorized — trigger token refresh
-    val isUnauthorized = err.getMessage.toLowerCase.contains("401")
-    if (isUnauthorized) {
-      // The caller should handle token refresh
-      replyTo ! Error(s"$context: token expired or invalid (HTTP 401)")
-    } else {
-      replyTo ! Error(s"$context: ${err.getMessage}")
-    }
+    httpRequestActor ! HttpRequestActor.Request[TwitchUserList](
+      method = HttpMethods.GET,
+      uri = uri,
+      headers = Seq(
+        Authorization(org.apache.pekko.http.scaladsl.model.headers.OAuth2BearerToken(accessToken)),
+        RawHeader("Client-Id", config.clientId)
+      ),
+      entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
+      decode = str => decode[TwitchUserList](str).toTry,
+      replyTo = probeRef
+    )
   }
 
 }

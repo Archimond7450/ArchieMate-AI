@@ -14,6 +14,7 @@ import com.archimond7450.archiemate.auth.TwitchOAuthActor
 import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.*
+import com.archimond7450.archiemate.twitch.TwitchApiActor
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -77,10 +78,14 @@ object ArchieMateApp {
         UserTokenRegistry(),
         "user-token-registry"
       )
+      val twitchApiActor = innerCtx.spawn(
+        Behaviors.supervise(TwitchApiActor(appConfig.twitch, httpRequestActor, userTokenRegistry)).onFailure[Throwable](SupervisorStrategy.resume),
+        "twitch-api-actor"
+      )
 
       Behaviors.receiveMessage {
         case StartHttp =>
-          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, classicSystem.classicSystem)
+          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, classicSystem.classicSystem)
           val authRoutes = new AuthRoutes(
             appConfig.twitch,
             twitchOAuthActor,

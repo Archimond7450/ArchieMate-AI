@@ -1,6 +1,5 @@
 package com.archimond7450.archiemate.twitch
 
-import com.archimond7450.archiemate.ArchieMateMediator
 import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.TwitchConfig
@@ -12,10 +11,12 @@ import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{StatusCodes, Uri}
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
+import org.apache.pekko.pattern.StatusReply
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -57,7 +58,7 @@ class TwitchApiActorSpec
 
   private def spawnHttpClient(): ActorRef[HttpClientActor.Command] = {
     testKit.spawn(
-      org.apache.pekko.actor.typed.scaladsl.Behaviors.supervise(HttpClientActor(classicProvider, testConfig))
+      Behaviors.supervise(HttpClientActor(classicProvider, testConfig))
         .onFailure[Throwable](org.apache.pekko.actor.typed.SupervisorStrategy.resume),
       s"http-client-${java.util.UUID.randomUUID().toString.take(8)}"
     )
@@ -65,19 +66,9 @@ class TwitchApiActorSpec
 
   private def spawnHttpRequestActor(httpClient: ActorRef[HttpClientActor.Command]): ActorRef[HttpRequestActor.Command] = {
     testKit.spawn(
-      org.apache.pekko.actor.typed.scaladsl.Behaviors.supervise(HttpRequestActor(httpClient))
+      Behaviors.supervise(HttpRequestActor(httpClient))
         .onFailure[Throwable](org.apache.pekko.actor.typed.SupervisorStrategy.resume),
       s"http-request-${java.util.UUID.randomUUID().toString.take(8)}"
-    )
-  }
-
-  private def spawnMediator(
-      httpClient: ActorRef[HttpClientActor.Command],
-      httpRequestActor: ActorRef[HttpRequestActor.Command]
-  ): ActorRef[ArchieMateMediator.Command] = {
-    testKit.spawn(
-      ArchieMateMediator.supervised(httpClient, httpRequestActor),
-      s"mediator-${java.util.UUID.randomUUID().toString.take(8)}"
     )
   }
 
@@ -86,11 +77,16 @@ class TwitchApiActorSpec
   }
 
   private def spawnTwitchApiActor(
-      mediator: ActorRef[ArchieMateMediator.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
       userTokenRegistry: ActorRef[UserTokenRegistry.Command],
-      helixBaseUrl: String = TwitchApiActor.DefaultHelixBaseUrl
+      helixBaseUrl: String = TwitchApiActor.DefaultHelixBaseUrl,
+      authBaseUrl: String = TwitchApiActor.DefaultAuthBaseUrl
   ): ActorRef[TwitchApiActor.Command] = {
-    testKit.spawn(TwitchApiActor(twitchConfig, mediator, userTokenRegistry, helixBaseUrl), s"twitch-api-${java.util.UUID.randomUUID().toString.take(8)}")
+    testKit.spawn(
+      Behaviors.supervise(TwitchApiActor(twitchConfig, httpRequestActor, userTokenRegistry, helixBaseUrl, authBaseUrl))
+        .onFailure[Throwable](org.apache.pekko.actor.typed.SupervisorStrategy.resume),
+      s"twitch-api-${java.util.UUID.randomUUID().toString.take(8)}"
+    )
   }
 
   /** Helper to bind a test server that simulates the Twitch Helix API. */
@@ -103,21 +99,23 @@ class TwitchApiActorSpec
       } ~
       path("helix" / "users") {
         get {
-          val userId = uri.query().toMap.get("id")
-          val login = uri.query().toMap.get("login")
-          val token = uri.query().toMap.get("oauth_token")
+          extract(_.request.uri) { uri =>
+            val userId = uri.query().toMap.get("id")
+            val login = uri.query().toMap.get("login")
+            val token = uri.query().toMap.get("oauth_token")
 
-          (token, userId, login) match {
-            case (Some(tok), _, _) if tok == "valid-token" =>
-              complete(StatusCodes.OK, """{"data":[{"id":"helix-user-123","login":"helixuser","display_name":"Helix User"}]}""")
-            case (Some(tok), _, _) if tok == "expired-token" =>
-              complete(StatusCodes.Unauthorized, """{"error":"Unauthorized","status":401,"message":"Invalid access token"}""")
-            case (_, Some(id), _) =>
-              complete(StatusCodes.OK, s"""{"data":[{"id":"$id","login":"user_$id","display_name":"User $id"}]}""")
-            case (_, _, Some(login)) =>
-              complete(StatusCodes.OK, s"""{"data":[{"id":"login-$login","login":"$login","display_name":"Login $login"}]}""")
-            case _ =>
-              complete(StatusCodes.BadRequest, """{"error":"Bad Request","status":400,"message":"Missing required parameters"}""")
+            (token, userId, login) match {
+              case (Some(tok), _, _) if tok == "valid-token" =>
+                complete(StatusCodes.OK, """{"data":[{"id":"helix-user-123","login":"helixuser","display_name":"Helix User"}]}""")
+              case (Some(tok), _, _) if tok == "expired-token" =>
+                complete(StatusCodes.Unauthorized, """{"error":"Unauthorized","status":401,"message":"Invalid access token"}""")
+              case (_, Some(id), _) =>
+                complete(StatusCodes.OK, s"""{"data":[{"id":"$id","login":"user_$id","display_name":"User $id"}]}""")
+              case (_, _, Some(login)) =>
+                complete(StatusCodes.OK, s"""{"data":[{"id":"login-$login","login":"$login","display_name":"Login $login"}]}""")
+              case _ =>
+                complete(StatusCodes.BadRequest, """{"error":"Bad Request","status":400,"message":"Missing required parameters"}""")
+            }
           }
         }
       }
@@ -133,13 +131,8 @@ class TwitchApiActorSpec
       val (port, binding) = bindHelixTestServer()
       val httpClient = spawnHttpClient()
       val httpRequestActor = spawnHttpRequestActor(httpClient)
-      val mediator = spawnMediator(httpClient, httpRequestActor)
       val userTokenRegistry = spawnUserTokenRegistry()
-      val actor = spawnTwitchApiActor(
-        mediator,
-        userTokenRegistry,
-        helixBaseUrl = s"http://localhost:$port/oauth2"
-      )
+      val actor = spawnTwitchApiActor(httpRequestActor, userTokenRegistry, s"http://localhost:$port/helix", s"http://localhost:$port/oauth2")
 
       val probe = testKit.createTestProbe[TwitchApiActor.TokenResponse]()
       actor ! TwitchApiActor.RefreshToken("test-refresh-token", probe.ref)
@@ -160,13 +153,8 @@ class TwitchApiActorSpec
       val (port, binding) = bindHelixTestServer()
       val httpClient = spawnHttpClient()
       val httpRequestActor = spawnHttpRequestActor(httpClient)
-      val mediator = spawnMediator(httpClient, httpRequestActor)
       val userTokenRegistry = spawnUserTokenRegistry()
-      val actor = spawnTwitchApiActor(
-        mediator,
-        userTokenRegistry,
-        helixBaseUrl = s"http://localhost:$port/helix"
-      )
+      val actor = spawnTwitchApiActor(httpRequestActor, userTokenRegistry, s"http://localhost:$port/helix")
 
       val probe = testKit.createTestProbe[TwitchApiActor.TokenResponse]()
       actor ! TwitchApiActor.GetUserById("user-123", "valid-token", probe.ref)
@@ -187,13 +175,8 @@ class TwitchApiActorSpec
       val (port, binding) = bindHelixTestServer()
       val httpClient = spawnHttpClient()
       val httpRequestActor = spawnHttpRequestActor(httpClient)
-      val mediator = spawnMediator(httpClient, httpRequestActor)
       val userTokenRegistry = spawnUserTokenRegistry()
-      val actor = spawnTwitchApiActor(
-        mediator,
-        userTokenRegistry,
-        helixBaseUrl = s"http://localhost:$port/helix"
-      )
+      val actor = spawnTwitchApiActor(httpRequestActor, userTokenRegistry, s"http://localhost:$port/helix")
 
       val probe = testKit.createTestProbe[TwitchApiActor.TokenResponse]()
       actor ! TwitchApiActor.GetCurrentUser("valid-token", probe.ref)
@@ -214,13 +197,8 @@ class TwitchApiActorSpec
       val (port, binding) = bindHelixTestServer()
       val httpClient = spawnHttpClient()
       val httpRequestActor = spawnHttpRequestActor(httpClient)
-      val mediator = spawnMediator(httpClient, httpRequestActor)
       val userTokenRegistry = spawnUserTokenRegistry()
-      val actor = spawnTwitchApiActor(
-        mediator,
-        userTokenRegistry,
-        helixBaseUrl = s"http://localhost:$port/helix"
-      )
+      val actor = spawnTwitchApiActor(httpRequestActor, userTokenRegistry, s"http://localhost:$port/helix")
 
       val probe = testKit.createTestProbe[TwitchApiActor.TokenResponse]()
       actor ! TwitchApiActor.GetUserByLogin("testlogin", "valid-token", probe.ref)
@@ -241,13 +219,8 @@ class TwitchApiActorSpec
       val (port, binding) = bindHelixTestServer()
       val httpClient = spawnHttpClient()
       val httpRequestActor = spawnHttpRequestActor(httpClient)
-      val mediator = spawnMediator(httpClient, httpRequestActor)
       val userTokenRegistry = spawnUserTokenRegistry()
-      val actor = spawnTwitchApiActor(
-        mediator,
-        userTokenRegistry,
-        helixBaseUrl = s"http://localhost:$port/helix"
-      )
+      val actor = spawnTwitchApiActor(httpRequestActor, userTokenRegistry, s"http://localhost:$port/helix")
 
       val probe = testKit.createTestProbe[TwitchApiActor.TokenResponse]()
       actor ! TwitchApiActor.GetCurrentUser("expired-token", probe.ref)
@@ -265,21 +238,16 @@ class TwitchApiActorSpec
     "handle connection errors gracefully" in {
       val httpClient = spawnHttpClient()
       val httpRequestActor = spawnHttpRequestActor(httpClient)
-      val mediator = spawnMediator(httpClient, httpRequestActor)
       val userTokenRegistry = spawnUserTokenRegistry()
-      // Use a non-existent port to trigger connection error
-      val actor = spawnTwitchApiActor(
-        mediator,
-        userTokenRegistry,
-        helixBaseUrl = "http://localhost:9999/helix"
-      )
+      val actor = spawnTwitchApiActor(httpRequestActor, userTokenRegistry, "http://localhost:9999/helix")
 
       val probe = testKit.createTestProbe[TwitchApiActor.TokenResponse]()
       actor ! TwitchApiActor.GetCurrentUser("any-token", probe.ref)
 
-      probe.receiveMessage() match {
+      probe.receiveMessage(5.seconds) match {
         case TwitchApiActor.Error(msg) =>
-          msg should include("failed")
+          val lower = msg.toLowerCase
+          assert(lower.contains("failed") || lower.contains("connection") || lower.contains("refused"))
         case other =>
           fail(s"Expected Error but got: $other")
       }

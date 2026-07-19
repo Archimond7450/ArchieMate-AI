@@ -36,15 +36,16 @@ object HttpRequestActor {
   ) extends Command
 
   // Internal command: wraps the HTTP response for processing
-  private final case class GotHttpRawResponse(
-      decode: String => Try[Any],
-      replyTo: ActorRef[StatusReply[Any]],
-      response: HttpClientActor.Response
+  private final case class GotHttpRawResponse[T](
+      decode: String => Try[T],
+      replyTo: ActorRef[StatusReply[T]],
+      response: HttpClientActor.Response,
+      statusCode: Int
   ) extends Command
 
-  private final case class GotHttpErrorResponse(
-      decode: String => Try[Any],
-      replyTo: ActorRef[StatusReply[Any]],
+  private final case class GotHttpErrorResponse[T](
+      decode: String => Try[T],
+      replyTo: ActorRef[StatusReply[T]],
       cause: Throwable
   ) extends Command
 
@@ -86,18 +87,20 @@ class HttpRequestActor private (
     Behaviors.receiveMessage {
       case req: Request[_] =>
         handleRequest(req.asInstanceOf[Request[Any]])
-        Behaviors.same
     }
 
-  private def handleRequest(request: Request[Any]): Unit = {
-    val replyTo = request.replyTo.asInstanceOf[ActorRef[StatusReply[Any]]]
+  private def handleRequest[T](
+      request: Request[T],
+      pending: Seq[Request[Any]] = Seq.empty
+  ): Behavior[Command] = {
+    val replyTo = request.replyTo
     val decode = request.decode
 
     // Create a message adapter that converts HttpClientActor's raw response
     // into an internal command sent to self.
     val probeRef = ctx.messageAdapter[StatusReply[HttpClientActor.Response]] {
       case StatusReply.Success(response: HttpClientActor.Response) =>
-        GotHttpRawResponse(decode, replyTo, response)
+        GotHttpRawResponse(decode, replyTo, response, response.response.status.intValue())
       case StatusReply.Error(ex) =>
         GotHttpErrorResponse(decode, replyTo, ex)
     }
@@ -112,33 +115,50 @@ class HttpRequestActor private (
       entity = request.entity,
       replyTo = probeRef
     )
+
+    // Switch to active state to handle the HTTP response
+    active(decode, replyTo, pending)
   }
 
-  /** Active state — waiting for the HTTP response from HttpClientActor. */
-  private def active(
-      decode: String => Try[Any],
-      replyTo: ActorRef[StatusReply[Any]]
+  /** Active state — waiting for the HTTP response from HttpClientActor.
+    * Stores pending requests to handle concurrent calls.
+    */
+  private def active[T](
+      decode: String => Try[T],
+      replyTo: ActorRef[StatusReply[T]],
+      pending: Seq[Request[Any]]
   ): Behavior[Command] =
-    Behaviors.receiveMessage {
-      case GotHttpRawResponse(_, _, response) =>
-        decodeAndForward(decode, replyTo, response)
-        waiting
-      case GotHttpErrorResponse(_, replyTo, cause) =>
+    Behaviors.receive {
+      case (_, GotHttpRawResponse(_, _, response, statusCode)) =>
+        decodeAndForward(decode, replyTo, response, statusCode)
+        processPending(pending)
+      case (_, GotHttpErrorResponse(_, replyTo, cause)) =>
         replyTo ! error(cause)
-        waiting
-      case _ =>
-        // Should not happen — any other command is queued until we're back in waiting
+        processPending(pending)
+      case (_, req: Request[_]) =>
+        active(decode, replyTo, pending :+ req.asInstanceOf[Request[Any]])
+      case (_, _) =>
         Behaviors.same
     }
 
-  private def decodeAndForward(
-      decode: String => Try[Any],
-      replyTo: ActorRef[StatusReply[Any]],
-      response: HttpClientActor.Response
+  private def processPending(
+      pending: Seq[Request[Any]]
+  ): Behavior[Command] = {
+    if (pending.isEmpty) waiting
+    else handleRequest(pending.head, pending.tail)
+  }
+
+  private def decodeAndForward[T](
+      decode: String => Try[T],
+      replyTo: ActorRef[StatusReply[T]],
+      response: HttpClientActor.Response,
+      statusCode: Int
   ): Unit = {
     decode(response.entityString) match {
-      case scala.util.Success(value) => replyTo ! success(value.asInstanceOf[Any])
-      case scala.util.Failure(ex)    => replyTo ! error(ex)
+      case scala.util.Success(value) => replyTo ! success(value)
+      case scala.util.Failure(ex) =>
+        // Include status code in error message for better debugging
+        replyTo ! error(new RuntimeException(s"HTTP $statusCode: ${ex.getMessage}"))
     }
   }
 

@@ -31,29 +31,20 @@ object TestResponse {
 }
 
 class HttpRequestActorSpec
-    extends ScalaTestWithActorTestKit
+    extends ScalaTestWithActorTestKit(HttpRequestActorSpec.testConfig)
     with AnyWordSpecLike
     with Matchers {
-
-  private val testConfig: Config = ConfigFactory.parseString("""
-    archiemate.http-client {
-      max-connections = 10
-      max-idle-timeout = 60s
-    }
-    pekko.http.host-connection-pool.client.connect-timeout = 1s
-    pekko.test.single-expect-default = 10s
-  """).withFallback(ConfigFactory.load())
 
   private val classicProvider: ClassicActorSystemProvider = new ClassicActorSystemProvider {
     def classicSystem = org.apache.pekko.actor.ActorSystem(
       "test-classic",
-      testConfig
+      HttpRequestActorSpec.testConfig
     )
   }
 
   private def spawnHttpClient(): ActorRef[HttpClientActor.Command] = {
     testKit.spawn(
-      Behaviors.supervise(HttpClientActor(classicProvider, testConfig))
+      Behaviors.supervise(HttpClientActor(classicProvider, HttpRequestActorSpec.testConfig))
         .onFailure[Throwable](SupervisorStrategy.resume),
       s"http-client-${java.util.UUID.randomUUID().toString.take(8)}"
     )
@@ -96,7 +87,7 @@ class HttpRequestActorSpec
   private def expectSuccess[T](
       probe: TestProbe[StatusReply[T]]
   ): T =
-    probe.receiveMessage() match {
+    probe.receiveMessage(5.seconds) match {
       case StatusReply.Success(value) => value.asInstanceOf[T]
       case StatusReply.Error(message) => fail(s"Expected success, got error: $message")
     }
@@ -104,7 +95,7 @@ class HttpRequestActorSpec
   private def expectError[T](
       probe: TestProbe[StatusReply[T]]
   ): String =
-    probe.receiveMessage() match {
+    probe.receiveMessage(5.seconds) match {
       case StatusReply.Success(_) => "Expected error"
       case StatusReply.Error(ex) => ex.getMessage
     }
@@ -233,4 +224,15 @@ class HttpRequestActorSpec
 
   }
 
+}
+
+object HttpRequestActorSpec {
+  val testConfig: Config = ConfigFactory.parseString("""
+    archiemate.http-client {
+      max-connections = 10
+      max-idle-timeout = 60s
+    }
+    pekko.http.host-connection-pool.client.connect-timeout = 1s
+    pekko.test.single-expect-default = 10s
+  """).withFallback(ConfigFactory.load())
 }
