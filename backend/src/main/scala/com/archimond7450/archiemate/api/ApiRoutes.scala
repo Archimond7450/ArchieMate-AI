@@ -1,5 +1,6 @@
 package com.archimond7450.archiemate.api
 
+import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.{*, given}
@@ -14,17 +15,26 @@ import com.archimond7450.archiemate.auth.AuthDirectives
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.settings.*
 import com.archimond7450.archiemate.twitch.TwitchApiActor
+import io.circe.Encoder
+import io.circe.generic.semiauto.deriveEncoder
+import io.circe.syntax.EncoderOps
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 import scala.util.{Failure, Success}
+
+final case class AuthResponse(userId: String)
+
+object AuthResponse {
+  given Encoder[AuthResponse] = deriveEncoder
+}
 
 class ApiRoutes(
     config: AppConfig,
     readinessTracker: ActorRef[ReadinessTracker.Command],
     jwtActor: ActorRef[JwtActor.Command],
     twitchApiActor: ActorRef[TwitchApiActor.Command],
-    classicActorSystem: org.apache.pekko.actor.ActorSystem
+    classicActorSystem: ActorSystem
 ) {
 
   private val apiVersion = config.server.apiVersion
@@ -64,7 +74,8 @@ class ApiRoutes(
                 case Some(Authorization(credentials)) =>
                   val token = credentials.value
                   onComplete(AuthDirectives.authenticateToken(token, jwtActor)) {
-                    case Success(Right(userId)) => complete(StatusCodes.OK -> s"Authenticated as $userId")
+                    case Success(Right(userId)) =>
+                      complete(StatusCodes.OK -> AuthResponse(userId).asJson.noSpaces)
                     case Success(Left(_))       => complete(StatusCodes.Unauthorized -> "Invalid token")
                     case Failure(_)             => complete(StatusCodes.Unauthorized -> "Token authentication failed")
                   }

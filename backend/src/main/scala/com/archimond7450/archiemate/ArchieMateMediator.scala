@@ -3,7 +3,7 @@ package com.archimond7450.archiemate
 import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
-import org.apache.pekko.actor.typed.scaladsl.Behaviors
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 
 /** Central mediator that routes commands to application actors.
   *
@@ -62,7 +62,7 @@ object ArchieMateMediator {
 }
 
 class ArchieMateMediator private (
-    ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[ArchieMateMediator.Command],
+    ctx: ActorContext[ArchieMateMediator.Command],
     httpClient: ActorRef[HttpClientActor.Command],
     httpRequestActor: ActorRef[HttpRequestActor.Command]
 ) {
@@ -70,7 +70,9 @@ class ArchieMateMediator private (
   import ArchieMateMediator.*
 
   def initial(): Behavior[Command] =
-    mainBehavior(State(httpClient, httpRequestActor))
+    Behaviors.withMdc(Map("actor" -> actorName)) {
+      mainBehavior(State(httpClient, httpRequestActor))
+    }
 
   private def mainBehavior(state: State): Behavior[Command] =
     Behaviors.receiveMessage {

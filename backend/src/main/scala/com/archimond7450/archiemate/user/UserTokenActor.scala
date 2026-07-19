@@ -5,6 +5,7 @@ import io.circe.derivation.{ConfiguredDecoder, ConfiguredEncoder}
 import io.circe.{Decoder, Encoder}
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.actor.ExtendedActorSystem
 import org.apache.pekko.persistence.typed.PersistenceId
 import org.apache.pekko.persistence.typed.scaladsl.*
 import org.apache.pekko.persistence.typed.RecoveryCompleted
@@ -89,7 +90,7 @@ private object PlatformConnectionRevoked {
 // Serializer (top-level for Java reflection)
 // ----------------------------------------------------------------
 
-class UserTokenActorEventSerializer(system: org.apache.pekko.actor.ExtendedActorSystem, configPath: String)
+class UserTokenActorEventSerializer(system: ExtendedActorSystem, configPath: String)
     extends GenericSerializer[UserTokenEvent](
       "user-token-actor",
       SerializerIDs.userTokenActorId

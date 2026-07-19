@@ -8,6 +8,9 @@ import org.apache.pekko.util.Timeout
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 object AuthDirectives {

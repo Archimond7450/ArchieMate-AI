@@ -24,8 +24,10 @@ object ReadinessTracker {
     * already applies its own supervision.
     */
   def apply(): Behavior[Command] =
-    Behaviors.setup[Command] { _ =>
-      new ReadinessTracker().initial()
+    Behaviors.setup[Command] { ctx =>
+      Behaviors.withMdc(Map("actor" -> actorName)) {
+        new ReadinessTracker().initial()
+      }
     }
 
   /** Returns a supervised version of this actor. Use when spawning from a

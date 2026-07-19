@@ -7,7 +7,7 @@ import com.archimond7450.archiemate.user.UserTokenRegistry.{*, given}
 import io.circe.Decoder
 import io.circe.parser.decode
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
-import org.apache.pekko.actor.typed.scaladsl.Behaviors
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.http.scaladsl.model.HttpMethods
 import org.apache.pekko.http.scaladsl.model.Uri
@@ -44,7 +44,7 @@ object TwitchApiActor {
   sealed trait Command
 
   /** Internal command to signal HTTP response received. */
-  private case class HttpRequestReply(reply: StatusReply[Any]) extends Command
+  private final case class HttpRequestReply(reply: StatusReply[Any]) extends Command
 
   /** Refresh an access token using its refresh token. */
   final case class RefreshToken(
@@ -194,7 +194,7 @@ object TwitchApiActor {
       helixBaseUrl: String,
       authBaseUrl: String
   )(using
-      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
+      ctx: ActorContext[Command],
       scheduler: Scheduler,
       timeout: Timeout,
       execEc: ExecutionContext
@@ -228,7 +228,7 @@ object TwitchApiActor {
       replyTo: ActorRef[TokenResponse],
       context: String
   )(using
-      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command]
+      ctx: ActorContext[Command]
   ): Unit = {
     val isUnauthorized = err.getMessage.toLowerCase.contains("401")
     if (isUnauthorized) {
@@ -249,7 +249,7 @@ object TwitchApiActor {
       httpRequestActor: ActorRef[HttpRequestActor.Command],
       authBaseUrl: String
   )(using
-      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
+      ctx: ActorContext[Command],
       scheduler: Scheduler,
       timeout: Timeout,
       execEc: ExecutionContext
@@ -297,7 +297,7 @@ object TwitchApiActor {
       httpRequestActor: ActorRef[HttpRequestActor.Command],
       helixBaseUrl: String
   )(using
-      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
+      ctx: ActorContext[Command],
       scheduler: Scheduler,
       timeout: Timeout,
       execEc: ExecutionContext
@@ -343,7 +343,7 @@ object TwitchApiActor {
       httpRequestActor: ActorRef[HttpRequestActor.Command],
       helixBaseUrl: String
   )(using
-      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
+      ctx: ActorContext[Command],
       scheduler: Scheduler,
       timeout: Timeout,
       execEc: ExecutionContext
@@ -387,7 +387,7 @@ object TwitchApiActor {
       httpRequestActor: ActorRef[HttpRequestActor.Command],
       helixBaseUrl: String
   )(using
-      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
+      ctx: ActorContext[Command],
       scheduler: Scheduler,
       timeout: Timeout,
       execEc: ExecutionContext

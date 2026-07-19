@@ -2,7 +2,7 @@ package com.archimond7450.archiemate.http
 
 import org.apache.pekko.actor.ClassicActorSystemProvider
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
-import org.apache.pekko.actor.typed.scaladsl.Behaviors
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{HttpEntity, HttpHeader, HttpMethod, HttpRequest, HttpResponse, RequestEntity, Uri}
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
@@ -73,7 +73,7 @@ object HttpClientActor {
     }.onFailure[Throwable](SupervisorStrategy.resume)
 
   private def mainBehavior(
-      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
+      ctx: ActorContext[Command],
       classicSystem: ClassicActorSystemProvider
   ): Behavior[Command] =
     Behaviors.receiveMessage {
@@ -83,7 +83,7 @@ object HttpClientActor {
     }
 
   private def sendRequest(
-      ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command],
+      ctx: ActorContext[Command],
       request: SendRequest,
       classicSystem: ClassicActorSystemProvider
   ): Unit = {

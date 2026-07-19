@@ -6,6 +6,7 @@ import com.archimond7450.archiemate.settings.TwitchConfig
 import io.circe.Decoder
 import io.circe.parser.decode
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, AskPattern}
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.{*, given}
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.Scheduler
@@ -156,7 +157,7 @@ object TwitchOAuthActor {
       mediator: ActorRef[ArchieMateMediator.Command],
       authBaseUrl: String,
       helixBaseUrl: String
-  )(using ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Behavior[Command] =
+  )(using ctx: ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Behavior[Command] =
     Behaviors.withMdc {
       Map("actor" -> actorName)
     }(
@@ -214,7 +215,7 @@ object TwitchOAuthActor {
       replyTo: ActorRef[TokenExchangeResponse],
       authBaseUrl: String,
       helixBaseUrl: String
-  )(using ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
+  )(using ctx: ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
     // Build form-encoded body for token exchange
     val body = Seq(
       s"client_id=${config.clientId}",
@@ -259,7 +260,7 @@ object TwitchOAuthActor {
       replyTo: ActorRef[TokenExchangeResponse],
       mediator: ActorRef[ArchieMateMediator.Command],
       helixBaseUrl: String
-  )(using ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
+  )(using ctx: ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
     // Fetch user info with the access token
     fetchTwitchUser(tokenResp, clientId, replyTo, mediator, helixBaseUrl)
   }
@@ -270,7 +271,7 @@ object TwitchOAuthActor {
       replyTo: ActorRef[TokenExchangeResponse],
       mediator: ActorRef[ArchieMateMediator.Command],
       helixBaseUrl: String
-  )(using ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
+  )(using ctx: ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
     val future: Future[StatusReply[TwitchHelixUserList]] = mediator ? { ref =>
       ArchieMateMediator.SendHttpRequest(
         HttpRequestActor.Request(
