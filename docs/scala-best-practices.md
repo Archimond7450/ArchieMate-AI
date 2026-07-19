@@ -91,6 +91,29 @@ import com.archimond7450.archiemate.settings.*
 import com.raquo.laminar.api.L.{*, given}
 ```
 
+### Prefer short import paths over fully qualified names
+
+When a type is imported, **always use the short name** in code. Do not use the fully qualified path unless you need to disambiguate between two types with the same name from different packages.
+
+**Do this:**
+```scala
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
+
+Behaviors.supervise(actor()).onFailure[Throwable](SupervisorStrategy.resume)
+```
+
+**Not this:**
+```scala
+org.apache.pekko.actor.typed.scaladsl.Behaviors.supervise(actor())
+```
+
+**Not this either:**
+```scala
+Behaviors.supervise(actor()).onFailure[Throwable](org.apache.pekko.actor.typed.SupervisorStrategy.resume)
+```
+
+The same applies to `org.apache.pekko.actor.ClassicActorSystemProvider`, `org.apache.pekko.util.Timeout`, and any other imported type. Only reach for the fully qualified name when the compiler complains about ambiguity.
+
 ## JSON (circe)
 
 Use **derived** decoders and encoders. Define a `given Decoder[A]` and `given Encoder[A]` in the companion object of your case class.
