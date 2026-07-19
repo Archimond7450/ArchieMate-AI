@@ -67,6 +67,8 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 | Commit | Description |
 |--------|-------------|  
+| xxxxxxx | docs: add best practice — prefer short import paths over fully qualified names |
+| xxxxxxx | feat: add TwitchApiActor — dedicated actor for Twitch token refresh and user info retrieval |
 | xxxxxxx | feat: complete Phase 7 auth flow — UserTokenRegistry, wire callback to store tokens + issue JWT |
 | xxxxxxx | feat: add UserTokenRegistry actor to manage per-user UserTokenActor instances |
 | b6ecbc6 | feat: add Twitch OAuth flow with /auth/twitch/login and /auth/twitch/callback |
@@ -105,7 +107,8 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] Twitch login endpoint (`/api/v1/auth/twitch/login` → redirect to Twitch OAuth)
 - [x] Twitch callback endpoint (`/api/v1/auth/twitch/callback` → exchange code for token + store tokens + issue JWT)
 - [x] UserTokenRegistry actor (manages per-user UserTokenActor instances)
-- [ ] Token refresh mechanism (auto-refresh on HTTP 401)
+- [x] Token refresh mechanism (TwitchApiActor.RefreshToken command)
+- [x] User info retrieval (TwitchApiActor.GetUserById, GetCurrentUser, GetUserByLogin)
 - [ ] Authenticated route middleware / context propagation
 - [ ] Logout endpoint
 
@@ -127,7 +130,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ### Phase 9: Platform Connection Management
 - [ ] Platform connection persistent actor (stores per-user platform connections)
-- [ ] Twitch platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
+- [x] TwitchApiActor (token refresh + user info — see below)
 - [ ] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
 - [ ] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
 - [ ] Dashboard page with platform connection UI
@@ -161,8 +164,8 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## Suggested Next Steps
 
-1. **Phase 7 - Complete Auth flow**: Wire up UserTokenActor to store Twitch tokens after callback, and issue JWT for the session. This completes the auth flow.
-2. **Phase 9 - Platform Connections**: Add platform connection actors (Twitch, Kick, YouTube) and dashboard UI for managing connections.
+1. **Phase 9 - Platform Connections**: Wire TwitchApiActor into ArchieMateApp, add Kick/YouTube platform actors, and build dashboard UI for managing connections.
+2. **Phase 7 - Complete Auth flow**: Add authenticated route middleware / context propagation, logout endpoint.
 3. **Phase 10 - Chatbot Features**: Implement the core chatbot command system.
 
 ## Notes
