@@ -67,6 +67,8 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 | Commit | Description |
 |--------|-------------|  
+| xxxxxxx | feat: complete Phase 7 auth flow — UserTokenRegistry, wire callback to store tokens + issue JWT |
+| xxxxxxx | feat: add UserTokenRegistry actor to manage per-user UserTokenActor instances |
 | b6ecbc6 | feat: add Twitch OAuth flow with /auth/twitch/login and /auth/twitch/callback |
 | 4a89ba0 | feat: integrate ArchieMateMediator with HttpClientActor and complete Phase 8 actor system |
 | aeb9af2 | feat: add HttpClientActor with 6 passing tests |
@@ -100,12 +102,9 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] Add jwt section to application.conf
 - [x] User token persistent actor (stores OAuth tokens per user)
 - [x] Twitch OAuth actor (state generation, code exchange, user fetch)
-- [x] /auth/twitch/login endpoint (redirect to Twitch OAuth)
-- [x] /auth/twitch/callback endpoint (exchange code, return tokens)
-- [x] User token persistent actor (stores OAuth tokens per user)
-- [ ] Twitch login endpoint (`/api/v1/auth/twitch/login` → redirect to Twitch OAuth)
-- [ ] Twitch callback endpoint (`/api/v1/auth/twitch/callback` → exchange code for token)
-- [ ] Twitch User ID as primary user identifier (no scopes required)
+- [x] Twitch login endpoint (`/api/v1/auth/twitch/login` → redirect to Twitch OAuth)
+- [x] Twitch callback endpoint (`/api/v1/auth/twitch/callback` → exchange code for token + store tokens + issue JWT)
+- [x] UserTokenRegistry actor (manages per-user UserTokenActor instances)
 - [ ] Token refresh mechanism (auto-refresh on HTTP 401)
 - [ ] Authenticated route middleware / context propagation
 - [ ] Logout endpoint
@@ -115,6 +114,11 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 ### Phase 8: Actor System ✅ COMPLETE
 - [x] HttpClientActor (HTTP client for platform connections)
 - [x] ArchieMateMediator (inter-actor command routing)
+- [x] HttpRequestActor (typed request wrapper with decode function)
+- [x] Wire HttpRequestActor into ArchieMateApp
+- [x] Add SendHttpRequest command to ArchieMateMediator
+- [x] Update TwitchOAuthActor to use HttpRequestActor for HTTP calls
+- [x] Expand HttpRequestActorSpec from 1 to 5 tests (success, HTTP error, decode failure, connection error, concurrent)
 - [ ] Chat message actor
 - [ ] Event dispatcher actor
 - [ ] Command processing actor

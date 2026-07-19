@@ -11,8 +11,10 @@ import com.archimond7450.archiemate.api.ApiRoutes
 import com.archimond7450.archiemate.auth.AuthRoutes
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.auth.TwitchOAuthActor
+import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.*
+import com.archimond7450.archiemate.user.UserTokenRegistry
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.util.{Failure, Success}
@@ -59,19 +61,34 @@ object ArchieMateApp {
         httpClientName
       )
       val jwtActor = innerCtx.spawn(createJwtActor(appConfig), "jwt-actor")
+      val httpRequestActor = innerCtx.spawn(
+        Behaviors.supervise(HttpRequestActor(httpClient)).onFailure[Throwable](SupervisorStrategy.resume),
+        "http-request-actor"
+      )
       val mediator = innerCtx.spawn(
-        ArchieMateMediator.supervised(httpClient),
+        ArchieMateMediator.supervised(httpClient, httpRequestActor),
         mediatorName
       )
       val twitchOAuthActor = innerCtx.spawn(
         TwitchOAuthActor(appConfig.twitch, mediator),
         "twitch-oauth-actor"
       )
+      val userTokenRegistry = innerCtx.spawn(
+        UserTokenRegistry(),
+        "user-token-registry"
+      )
 
       Behaviors.receiveMessage {
         case StartHttp =>
           val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, classicSystem.classicSystem)
-          val authRoutes = new AuthRoutes(appConfig.twitch, twitchOAuthActor, appConfig.twitch.redirectUriPostfix, classicSystem.classicSystem)
+          val authRoutes = new AuthRoutes(
+            appConfig.twitch,
+            twitchOAuthActor,
+            userTokenRegistry,
+            jwtActor,
+            appConfig.twitch.redirectUriPostfix,
+            classicSystem.classicSystem
+          )
           val combinedRoutes = authRoutes.authRoutes ~ apiRoutes.apiRoutes
           val bindingFuture = Http().newServerAt(appConfig.server.host, appConfig.server.port).bind(combinedRoutes)
           bindingFuture.onComplete {

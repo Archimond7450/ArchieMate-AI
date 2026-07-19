@@ -1,12 +1,15 @@
 package com.archimond7450.archiemate
 
+import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.pekko.actor.ClassicActorSystemProvider
 import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
 import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.actor.typed.SupervisorStrategy
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.HttpMethods
 import org.apache.pekko.http.scaladsl.model.MediaTypes.`application/json`
@@ -44,17 +47,27 @@ class ArchieMateMediatorIntegrationSpec
 
   private def spawnMediator(
       httpClient: ActorRef[HttpClientActor.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
       name: String = "archie-mate-mediator"
   ): ActorRef[ArchieMateMediator.Command] =
     testKit.spawn(
-      ArchieMateMediator(httpClient),
+      ArchieMateMediator(httpClient, httpRequestActor),
       s"$name-${java.util.UUID.randomUUID().toString.take(8)}"
     )
 
   private def spawnHttpClient(): ActorRef[HttpClientActor.Command] = {
     testKit.spawn(
-      HttpClientActor(classicProvider, testConfig),
+      Behaviors.supervise(HttpClientActor(classicProvider, testConfig))
+        .onFailure[Throwable](SupervisorStrategy.resume),
       s"http-client-${java.util.UUID.randomUUID().toString.take(8)}"
+    )
+  }
+
+  private def spawnHttpRequestActor(httpClient: ActorRef[HttpClientActor.Command]): ActorRef[HttpRequestActor.Command] = {
+    testKit.spawn(
+      Behaviors.supervise(HttpRequestActor(httpClient))
+        .onFailure[Throwable](SupervisorStrategy.resume),
+      s"http-request-${java.util.UUID.randomUUID().toString.take(8)}"
     )
   }
 
@@ -107,7 +120,8 @@ class ArchieMateMediatorIntegrationSpec
 
     "route a GET request through to HttpClientActor and receive a response" in {
       val httpActor = spawnHttpClient()
-      val mediator = spawnMediator(httpActor)
+      val httpRequestActor = spawnHttpRequestActor(httpActor)
+      val mediator = spawnMediator(httpActor, httpRequestActor)
       val serverBinding = bindTestServer()
       val port = serverBinding.localAddress.getPort
 
@@ -129,7 +143,8 @@ class ArchieMateMediatorIntegrationSpec
 
     "route a POST request with entity through to HttpClientActor" in {
       val httpActor = spawnHttpClient()
-      val mediator = spawnMediator(httpActor)
+      val httpRequestActor = spawnHttpRequestActor(httpActor)
+      val mediator = spawnMediator(httpActor, httpRequestActor)
       val serverBinding = bindTestServer()
       val port = serverBinding.localAddress.getPort
 
@@ -158,7 +173,8 @@ class ArchieMateMediatorIntegrationSpec
 
     "route multiple requests through to the same HttpClientActor" in {
       val httpActor = spawnHttpClient()
-      val mediator = spawnMediator(httpActor)
+      val httpRequestActor = spawnHttpRequestActor(httpActor)
+      val mediator = spawnMediator(httpActor, httpRequestActor)
       val serverBinding = bindTestServer()
       val port = serverBinding.localAddress.getPort
 
@@ -188,7 +204,8 @@ class ArchieMateMediatorIntegrationSpec
 
     "propagate connection errors through the mediator" in {
       val httpActor = spawnHttpClient()
-      val mediator = spawnMediator(httpActor)
+      val httpRequestActor = spawnHttpRequestActor(httpActor)
+      val mediator = spawnMediator(httpActor, httpRequestActor)
 
       val responseProbe = testKit.createTestProbe[StatusReply[HttpClientActor.Response]]("response")
       mediator ! ArchieMateMediator.SendHttpClientRequest(
@@ -205,7 +222,8 @@ class ArchieMateMediatorIntegrationSpec
 
     "return correct HTTP status codes through the mediator" in {
       val httpActor = spawnHttpClient()
-      val mediator = spawnMediator(httpActor)
+      val httpRequestActor = spawnHttpRequestActor(httpActor)
+      val mediator = spawnMediator(httpActor, httpRequestActor)
       val serverBinding = bindTestServer()
       val port = serverBinding.localAddress.getPort
 

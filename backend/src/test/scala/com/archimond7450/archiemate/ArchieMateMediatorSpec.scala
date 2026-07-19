@@ -1,8 +1,11 @@
 package com.archimond7450.archiemate
 
+import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.actor.typed.SupervisorStrategy
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.http.scaladsl.model.{HttpMethods, Uri}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -14,10 +17,11 @@ class ArchieMateMediatorSpec
 
   private def spawnMediator(
       httpClient: ActorRef[HttpClientActor.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
       name: String = "archie-mate-mediator"
   ): ActorRef[ArchieMateMediator.Command] =
     testKit.spawn(
-      ArchieMateMediator(httpClient),
+      ArchieMateMediator(httpClient, httpRequestActor),
       s"$name-${java.util.UUID.randomUUID().toString.take(8)}"
     )
 
@@ -25,7 +29,8 @@ class ArchieMateMediatorSpec
 
     "route a SendRequest command to the registered http-client actor" in {
       val httpProbe = testKit.createTestProbe[HttpClientActor.Command]("http-client")
-      val mediator = spawnMediator(httpProbe.ref)
+      val httpRequestProbe = testKit.createTestProbe[HttpRequestActor.Command]("http-request")
+      val mediator = spawnMediator(httpProbe.ref, httpRequestProbe.ref)
 
       mediator ! ArchieMateMediator.SendHttpClientRequest(
         HttpClientActor.SendRequest(
@@ -44,7 +49,8 @@ class ArchieMateMediatorSpec
 
     "route multiple commands to the same actor in order" in {
       val httpProbe = testKit.createTestProbe[HttpClientActor.Command]("http-client")
-      val mediator = spawnMediator(httpProbe.ref)
+      val httpRequestProbe = testKit.createTestProbe[HttpRequestActor.Command]("http-request")
+      val mediator = spawnMediator(httpProbe.ref, httpRequestProbe.ref)
 
       mediator ! ArchieMateMediator.SendHttpClientRequest(
         HttpClientActor.SendRequest(
@@ -76,7 +82,8 @@ class ArchieMateMediatorSpec
 
     "preserve command order across rapid sends" in {
       val httpProbe = testKit.createTestProbe[HttpClientActor.Command]("http-client")
-      val mediator = spawnMediator(httpProbe.ref)
+      val httpRequestProbe = testKit.createTestProbe[HttpRequestActor.Command]("http-request")
+      val mediator = spawnMediator(httpProbe.ref, httpRequestProbe.ref)
 
       for (i <- 1 to 3) {
         mediator ! ArchieMateMediator.SendHttpClientRequest(

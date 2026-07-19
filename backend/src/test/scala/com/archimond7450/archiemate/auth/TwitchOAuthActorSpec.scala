@@ -1,5 +1,6 @@
 package com.archimond7450.archiemate.auth
 
+import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.ArchieMateMediator
 import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.TwitchConfig
@@ -54,11 +55,29 @@ class TwitchOAuthActorSpec
   )
 
   private def spawnHttpClient(): ActorRef[HttpClientActor.Command] = {
-    testKit.spawn(HttpClientActor(classicProvider, testConfig), s"http-client-${java.util.UUID.randomUUID().toString.take(8)}")
+    testKit.spawn(
+      org.apache.pekko.actor.typed.scaladsl.Behaviors.supervise(HttpClientActor(classicProvider, testConfig))
+        .onFailure[Throwable](org.apache.pekko.actor.typed.SupervisorStrategy.resume),
+      s"http-client-${java.util.UUID.randomUUID().toString.take(8)}"
+    )
   }
 
-  private def spawnMediator(httpClient: ActorRef[HttpClientActor.Command]): ActorRef[ArchieMateMediator.Command] = {
-    testKit.spawn(ArchieMateMediator.supervised(httpClient), s"mediator-${java.util.UUID.randomUUID().toString.take(8)}")
+  private def spawnHttpRequestActor(httpClient: ActorRef[HttpClientActor.Command]): ActorRef[HttpRequestActor.Command] = {
+    testKit.spawn(
+      org.apache.pekko.actor.typed.scaladsl.Behaviors.supervise(HttpRequestActor(httpClient))
+        .onFailure[Throwable](org.apache.pekko.actor.typed.SupervisorStrategy.resume),
+      s"http-request-${java.util.UUID.randomUUID().toString.take(8)}"
+    )
+  }
+
+  private def spawnMediator(
+      httpClient: ActorRef[HttpClientActor.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command]
+  ): ActorRef[ArchieMateMediator.Command] = {
+    testKit.spawn(
+      ArchieMateMediator.supervised(httpClient, httpRequestActor),
+      s"mediator-${java.util.UUID.randomUUID().toString.take(8)}"
+    )
   }
 
   private def spawnTwitchOAuthActor(
@@ -104,7 +123,8 @@ class TwitchOAuthActorSpec
 
     "generate a valid OAuth state and authorization URL" in {
       val httpClient = spawnHttpClient()
-      val mediator = spawnMediator(httpClient)
+      val httpRequestActor = spawnHttpRequestActor(httpClient)
+      val mediator = spawnMediator(httpClient, httpRequestActor)
       val actor = spawnTwitchOAuthActor(mediator)
 
       val probe = testKit.createTestProbe[TwitchOAuthActor.StateGenerated]()
@@ -129,7 +149,8 @@ class TwitchOAuthActorSpec
     "exchange a valid code for tokens" in {
       val (port, binding) = bindTwitchTestServer()
       val httpClient = spawnHttpClient()
-      val mediator = spawnMediator(httpClient)
+      val httpRequestActor = spawnHttpRequestActor(httpClient)
+      val mediator = spawnMediator(httpClient, httpRequestActor)
       val actor = spawnTwitchOAuthActor(
         mediator,
         authBaseUrl = s"http://localhost:$port/oauth2",
@@ -163,7 +184,8 @@ class TwitchOAuthActorSpec
 
     "reject exchange with invalid state" in {
       val httpClient = spawnHttpClient()
-      val mediator = spawnMediator(httpClient)
+      val httpRequestActor = spawnHttpRequestActor(httpClient)
+      val mediator = spawnMediator(httpClient, httpRequestActor)
       val actor = spawnTwitchOAuthActor(mediator)
 
       val probe = testKit.createTestProbe[TwitchOAuthActor.TokenExchangeResponse]()

@@ -1,7 +1,7 @@
 package com.archimond7450.archiemate.auth
 
+import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.ArchieMateMediator
-import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.TwitchConfig
 import io.circe.Decoder
 import io.circe.parser.decode
@@ -224,16 +224,17 @@ object TwitchOAuthActor {
       s"redirect_uri=${redirectUri}"
     ).mkString("&")
 
-    // Use ask pattern to send the request and receive the response
-    val future: Future[StatusReply[HttpClientActor.Response]] = mediator ? { ref =>
-      ArchieMateMediator.SendHttpClientRequest(
-        HttpClientActor.SendRequest(
+    // Use ask pattern to send the request and receive the decoded response
+    val future: Future[StatusReply[TwitchTokenResponse]] = mediator ? { ref =>
+      ArchieMateMediator.SendHttpRequest(
+        HttpRequestActor.Request[TwitchTokenResponse](
           method = HttpMethods.POST,
           uri = Uri(s"$authBaseUrl/token"),
           headers = Seq(
             RawHeader("Content-Type", "application/x-www-form-urlencoded")
           ),
           entity = HttpEntity(`application/x-www-form-urlencoded`, body.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+          decode = str => decode[TwitchTokenResponse](str).toTry,
           replyTo = ref
         )
       )
@@ -242,8 +243,8 @@ object TwitchOAuthActor {
     future.onComplete {
       case scala.util.Success(resp) =>
         resp match {
-          case StatusReply.Success(inner: HttpClientActor.Response) =>
-            parseTokenResponse(inner.entityString, config.clientId, replyTo, mediator, helixBaseUrl)
+          case StatusReply.Success(tokenResp: TwitchTokenResponse) =>
+            parseTokenResponse(tokenResp, config.clientId, replyTo, mediator, helixBaseUrl)
           case StatusReply.Error(err) =>
             replyTo ! TokenExchangeError(s"Token exchange failed: ${err.getMessage}")
         }
@@ -253,19 +254,14 @@ object TwitchOAuthActor {
   }
 
   private def parseTokenResponse(
-      entityString: String,
+      tokenResp: TwitchTokenResponse,
       clientId: String,
       replyTo: ActorRef[TokenExchangeResponse],
       mediator: ActorRef[ArchieMateMediator.Command],
       helixBaseUrl: String
   )(using ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
-    decode[TwitchTokenResponse](entityString) match {
-      case Right(tokenResp) =>
-        // Fetch user info with the access token
-        fetchTwitchUser(tokenResp, clientId, replyTo, mediator, helixBaseUrl)
-      case Left(err) =>
-        replyTo ! TokenExchangeError(s"Failed to parse token response: ${err.getMessage}")
-    }
+    // Fetch user info with the access token
+    fetchTwitchUser(tokenResp, clientId, replyTo, mediator, helixBaseUrl)
   }
 
   private def fetchTwitchUser(
@@ -275,9 +271,9 @@ object TwitchOAuthActor {
       mediator: ActorRef[ArchieMateMediator.Command],
       helixBaseUrl: String
   )(using ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
-    val future: Future[StatusReply[HttpClientActor.Response]] = mediator ? { ref =>
-      ArchieMateMediator.SendHttpClientRequest(
-        HttpClientActor.SendRequest(
+    val future: Future[StatusReply[TwitchHelixUserList]] = mediator ? { ref =>
+      ArchieMateMediator.SendHttpRequest(
+        HttpRequestActor.Request(
           method = HttpMethods.GET,
           uri = Uri(s"$helixBaseUrl/users"),
           headers = Seq(
@@ -285,6 +281,7 @@ object TwitchOAuthActor {
             RawHeader("Client-Id", clientId)
           ),
           entity = HttpEntity.Empty,
+          decode = str => decode[TwitchHelixUserList](str).toTry,
           replyTo = ref
         )
       )
@@ -293,20 +290,17 @@ object TwitchOAuthActor {
     future.onComplete {
       case scala.util.Success(resp) =>
         resp match {
-          case StatusReply.Success(inner: HttpClientActor.Response) =>
-            decode[TwitchHelixUserList](inner.entityString) match {
-              case Right(userList) if userList.data.nonEmpty =>
-                val user = userList.data.head
-                replyTo ! TokenExchangeSuccess(
-                  accessToken = tokenResp.accessToken,
-                  refreshToken = tokenResp.refreshToken,
-                  expiresIn = tokenResp.expiresIn,
-                  platformUserId = user.id
-                )
-              case Right(_) =>
-                replyTo ! TokenExchangeError("No user data returned from Twitch")
-              case Left(err) =>
-                replyTo ! TokenExchangeError(s"Failed to parse user response: ${err.getMessage}")
+          case StatusReply.Success(userList: TwitchHelixUserList) =>
+            if (userList.data.nonEmpty) {
+              val user = userList.data.head
+              replyTo ! TokenExchangeSuccess(
+                accessToken = tokenResp.accessToken,
+                refreshToken = tokenResp.refreshToken,
+                expiresIn = tokenResp.expiresIn,
+                platformUserId = user.id
+              )
+            } else {
+              replyTo ! TokenExchangeError("No user data returned from Twitch")
             }
           case StatusReply.Error(err) =>
             replyTo ! TokenExchangeError(s"Failed to get user info: ${err.getMessage}")

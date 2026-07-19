@@ -1,5 +1,6 @@
 package com.archimond7450.archiemate
 
+import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
@@ -29,41 +30,55 @@ object ArchieMateMediator {
   final case class SendHttpClientRequest(cmd: HttpClientActor.Command)
       extends Command
 
-  private case class State(httpClient: ActorRef[HttpClientActor.Command])
+  /** Send a prepared HTTP request via HttpRequestActor (typed decode).
+    */
+  final case class SendHttpRequest(cmd: HttpRequestActor.Command)
+      extends Command
+
+  private case class State(
+      httpClient: ActorRef[HttpClientActor.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command]
+  )
 
   /** Returns an unsupervised behavior. Use when the parent applies its own
     * supervision.
     */
   def apply(
-      httpClient: ActorRef[HttpClientActor.Command]
+      httpClient: ActorRef[HttpClientActor.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command]
   ): Behavior[Command] =
     Behaviors.setup { ctx =>
-      new ArchieMateMediator(ctx, httpClient).initial()
+      new ArchieMateMediator(ctx, httpClient, httpRequestActor).initial()
     }
 
   /** Returns a supervised behavior. Use when spawning as a root actor. */
   def supervised(
-      httpClient: ActorRef[HttpClientActor.Command]
+      httpClient: ActorRef[HttpClientActor.Command],
+      httpRequestActor: ActorRef[HttpRequestActor.Command]
   ): Behavior[Command] =
-    Behaviors.supervise(apply(httpClient))
+    Behaviors.supervise(apply(httpClient, httpRequestActor))
       .onFailure[Throwable](SupervisorStrategy.resume)
 
 }
 
 class ArchieMateMediator private (
     ctx: org.apache.pekko.actor.typed.scaladsl.ActorContext[ArchieMateMediator.Command],
-    httpClient: ActorRef[HttpClientActor.Command]
+    httpClient: ActorRef[HttpClientActor.Command],
+    httpRequestActor: ActorRef[HttpRequestActor.Command]
 ) {
 
   import ArchieMateMediator.*
 
   def initial(): Behavior[Command] =
-    mainBehavior(State(httpClient))
+    mainBehavior(State(httpClient, httpRequestActor))
 
   private def mainBehavior(state: State): Behavior[Command] =
     Behaviors.receiveMessage {
       case SendHttpClientRequest(cmd) =>
         state.httpClient ! cmd
+        Behaviors.same
+      case SendHttpRequest(cmd) =>
+        state.httpRequestActor ! cmd
         Behaviors.same
     }
 
