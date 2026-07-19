@@ -1,7 +1,6 @@
 package com.archimond7450.archiemate.user
 
 import com.archimond7450.archiemate.user.UserTokenRegistry.{*, given}
-import org.apache.pekko.actor.ClassicActorSystemProvider
 import org.apache.pekko.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
@@ -20,10 +19,6 @@ class UserTokenRegistrySpec
     extends ScalaTestWithActorTestKit(EventSourcedBehaviorTestKit.config)
     with AnyWordSpecLike
     with Matchers {
-
-  private val classicProvider: ClassicActorSystemProvider = new ClassicActorSystemProvider {
-    def classicSystem = org.apache.pekko.actor.ActorSystem("test-classic")
-  }
 
   private def spawnRegistry(): ActorRef[UserTokenRegistry.Command] = {
     testKit.spawn(UserTokenRegistry(), "user-token-registry")

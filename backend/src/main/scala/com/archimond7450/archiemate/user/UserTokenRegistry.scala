@@ -195,150 +195,164 @@ object UserTokenRegistry {
   // Forwarding helpers
   // ----------------------------------------------------------------
 
-  private def forwardCommand(
-      register: RegisterTwitchAuthToken,
+  /** Trait to build the ask payload for a given command type. */
+  private trait AskBuilder[Cmd] {
+    def buildAsk(cmd: Cmd, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command
+  }
+
+  private object AskBuilder {
+    given AskBuilder[RegisterTwitchAuthToken] with
+      def buildAsk(cmd: RegisterTwitchAuthToken, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
+        UserTokenActor.RegisterTwitchAuthToken(
+          cmd.accessToken,
+          cmd.refreshToken,
+          cmd.expiresAt,
+          cmd.platformUserId,
+          ref
+        )
+
+    given AskBuilder[GetTwitchAuthToken] with
+      def buildAsk(cmd: GetTwitchAuthToken, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
+        UserTokenActor.GetTwitchAuthToken(cmd.tokenId, ref)
+
+    given AskBuilder[GetAllTwitchAuthTokens] with
+      def buildAsk(cmd: GetAllTwitchAuthTokens, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
+        UserTokenActor.GetAllTwitchAuthTokens(ref)
+
+    given AskBuilder[UpdateTwitchAuthToken] with
+      def buildAsk(cmd: UpdateTwitchAuthToken, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
+        UserTokenActor.UpdateTwitchAuthToken(
+          cmd.tokenId,
+          cmd.accessToken,
+          cmd.refreshToken,
+          cmd.expiresAt,
+          ref
+        )
+
+    given AskBuilder[RevokeTwitchAuthToken] with
+      def buildAsk(cmd: RevokeTwitchAuthToken, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
+        UserTokenActor.RevokeTwitchAuthToken(cmd.tokenId, ref)
+
+    given AskBuilder[HasTwitchAuth] with
+      def buildAsk(cmd: HasTwitchAuth, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
+        UserTokenActor.GetAllTwitchAuthTokens(ref)
+  }
+
+  /** Forwards a command to a per-user [[UserTokenActor]] and handles the response.
+   *
+   *  @tparam Cmd the command type
+   *  @param cmd the command to forward
+   *  @param actorRef the per-user actor to send the command to
+   */
+  private def forwardCommand[Cmd](
+      cmd: Cmd,
       actorRef: ActorRef[UserTokenActor.Command]
-  )(using scheduler: org.apache.pekko.actor.typed.Scheduler, timeout: Timeout, ec: ExecutionContext): Unit = {
-    val future = actorRef ? { ref =>
-      UserTokenActor.RegisterTwitchAuthToken(
-        register.accessToken,
-        register.refreshToken,
-        register.expiresAt,
-        register.platformUserId,
-        ref
-      )
+  )(using
+      builder: AskBuilder[Cmd],
+      scheduler: org.apache.pekko.actor.typed.Scheduler,
+      timeout: Timeout,
+      ec: ExecutionContext
+  ): Unit = {
+    val future = actorRef ? { (ref: ActorRef[UserTokenActor.AuthResponse]) =>
+      builder.buildAsk(cmd, ref)
     }
     future.onComplete {
       case scala.util.Success(resp: UserTokenActor.AuthResponse) =>
         resp match {
-          case UserTokenActor.AuthRegistered(tokenId, _) =>
-            register.replyTo ! Registered(tokenId)
-          case UserTokenActor.Error(msg) =>
-            register.replyTo ! Error(msg)
+          case err: UserTokenActor.Error =>
+            handleError(cmd, err)
           case other =>
-            register.replyTo ! Error(s"Unexpected response: $other")
+            handleSuccess(cmd, other)
         }
       case scala.util.Failure(ex) =>
-        register.replyTo ! Error(s"Command failed: ${ex.getMessage}")
+        handleFailure(cmd, ex)
     }(ec)
   }
 
-  private def forwardCommand(
-      get: GetTwitchAuthToken,
-      actorRef: ActorRef[UserTokenActor.Command]
-  )(using scheduler: org.apache.pekko.actor.typed.Scheduler, timeout: Timeout, ec: ExecutionContext): Unit = {
-    val future = actorRef ? { ref =>
-      UserTokenActor.GetTwitchAuthToken(get.tokenId, ref)
-    }
-    future.onComplete {
-      case scala.util.Success(resp: UserTokenActor.AuthResponse) =>
-        resp match {
-          case UserTokenActor.AuthFound(token) =>
-            get.replyTo ! TokenFound(token)
-          case UserTokenActor.AuthNotFound =>
-            get.replyTo ! TokenNotFound
-          case UserTokenActor.Error(msg) =>
-            get.replyTo ! Error(msg)
-          case other =>
-            get.replyTo ! Error(s"Unexpected response: $other")
-        }
-      case scala.util.Failure(ex) =>
-        get.replyTo ! Error(s"Command failed: ${ex.getMessage}")
-    }(ec)
+  private def handleSuccess[Cmd](
+      cmd: Cmd,
+      resp: UserTokenActor.AuthResponse
+  ): Unit = cmd match {
+    case register: RegisterTwitchAuthToken =>
+      resp match {
+        case UserTokenActor.AuthRegistered(tokenId, _) =>
+          register.replyTo ! Registered(tokenId)
+        case other =>
+          register.replyTo ! Error(s"Unexpected response: $other")
+      }
+    case get: GetTwitchAuthToken =>
+      resp match {
+        case UserTokenActor.AuthFound(token) =>
+          get.replyTo ! TokenFound(token)
+        case UserTokenActor.AuthNotFound =>
+          get.replyTo ! TokenNotFound
+        case other =>
+          get.replyTo ! Error(s"Unexpected response: $other")
+      }
+    case getAll: GetAllTwitchAuthTokens =>
+      resp match {
+        case UserTokenActor.AllAuthTokensFound(tokens) =>
+          getAll.replyTo ! AllTokensFound(tokens)
+        case other =>
+          getAll.replyTo ! Error(s"Unexpected response: $other")
+      }
+    case update: UpdateTwitchAuthToken =>
+      resp match {
+        case UserTokenActor.AuthUpdated(tokenId) =>
+          update.replyTo ! Updated(tokenId)
+        case other =>
+          update.replyTo ! UpdateFailed(s"Unexpected response: $other")
+      }
+    case revoke: RevokeTwitchAuthToken =>
+      resp match {
+        case UserTokenActor.AuthRevoked(tokenId) =>
+          revoke.replyTo ! Updated(tokenId)
+        case other =>
+          revoke.replyTo ! UpdateFailed(s"Unexpected response: $other")
+      }
+    case has: HasTwitchAuth =>
+      resp match {
+        case UserTokenActor.AllAuthTokensFound(tokens) =>
+          has.replyTo ! HasAuth(tokens.nonEmpty)
+        case _ =>
+          has.replyTo ! HasAuth(false)
+      }
   }
 
-  private def forwardCommand(
-      getAll: GetAllTwitchAuthTokens,
-      actorRef: ActorRef[UserTokenActor.Command]
-  )(using scheduler: org.apache.pekko.actor.typed.Scheduler, timeout: Timeout, ec: ExecutionContext): Unit = {
-    val future = actorRef ? { ref =>
-      UserTokenActor.GetAllTwitchAuthTokens(ref)
-    }
-    future.onComplete {
-      case scala.util.Success(resp: UserTokenActor.AuthResponse) =>
-        resp match {
-          case UserTokenActor.AllAuthTokensFound(tokens) =>
-            getAll.replyTo ! AllTokensFound(tokens)
-          case UserTokenActor.Error(msg) =>
-            getAll.replyTo ! Error(msg)
-          case other =>
-            getAll.replyTo ! Error(s"Unexpected response: $other")
-        }
-      case scala.util.Failure(ex) =>
-        getAll.replyTo ! Error(s"Command failed: ${ex.getMessage}")
-    }(ec)
+  private def handleError[Cmd](
+      cmd: Cmd,
+      err: UserTokenActor.Error
+  ): Unit = cmd match {
+    case _: RegisterTwitchAuthToken =>
+      cmd.asInstanceOf[RegisterTwitchAuthToken].replyTo ! Error(err.message)
+    case get: GetTwitchAuthToken =>
+      get.replyTo ! Error(err.message)
+    case getAll: GetAllTwitchAuthTokens =>
+      getAll.replyTo ! Error(err.message)
+    case update: UpdateTwitchAuthToken =>
+      update.replyTo ! UpdateFailed(err.message)
+    case revoke: RevokeTwitchAuthToken =>
+      revoke.replyTo ! UpdateFailed(err.message)
+    case _: HasTwitchAuth =>
+      cmd.asInstanceOf[HasTwitchAuth].replyTo ! HasAuth(false)
   }
 
-  private def forwardCommand(
-      update: UpdateTwitchAuthToken,
-      actorRef: ActorRef[UserTokenActor.Command]
-  )(using scheduler: org.apache.pekko.actor.typed.Scheduler, timeout: Timeout, ec: ExecutionContext): Unit = {
-    val future = actorRef ? { ref =>
-      UserTokenActor.UpdateTwitchAuthToken(
-        update.tokenId,
-        update.accessToken,
-        update.refreshToken,
-        update.expiresAt,
-        ref
-      )
-    }
-    future.onComplete {
-      case scala.util.Success(resp: UserTokenActor.AuthResponse) =>
-        resp match {
-          case UserTokenActor.AuthUpdated(tokenId) =>
-            update.replyTo ! Updated(tokenId)
-          case UserTokenActor.Error(msg) =>
-            update.replyTo ! UpdateFailed(msg)
-          case other =>
-            update.replyTo ! UpdateFailed(s"Unexpected response: $other")
-        }
-      case scala.util.Failure(ex) =>
-        update.replyTo ! UpdateFailed(s"Command failed: ${ex.getMessage}")
-    }(ec)
-  }
-
-  private def forwardCommand(
-      revoke: RevokeTwitchAuthToken,
-      actorRef: ActorRef[UserTokenActor.Command]
-  )(using scheduler: org.apache.pekko.actor.typed.Scheduler, timeout: Timeout, ec: ExecutionContext): Unit = {
-    val future = actorRef ? { ref =>
-      UserTokenActor.RevokeTwitchAuthToken(revoke.tokenId, ref)
-    }
-    future.onComplete {
-      case scala.util.Success(resp: UserTokenActor.AuthResponse) =>
-        resp match {
-          case UserTokenActor.AuthRevoked(tokenId) =>
-            revoke.replyTo ! Updated(tokenId)
-          case UserTokenActor.Error(msg) =>
-            revoke.replyTo ! UpdateFailed(msg)
-          case other =>
-            revoke.replyTo ! UpdateFailed(s"Unexpected response: $other")
-        }
-      case scala.util.Failure(ex) =>
-        revoke.replyTo ! UpdateFailed(s"Command failed: ${ex.getMessage}")
-    }(ec)
-  }
-
-  private def forwardCommand(
-      has: HasTwitchAuth,
-      actorRef: ActorRef[UserTokenActor.Command]
-  )(using scheduler: org.apache.pekko.actor.typed.Scheduler, timeout: Timeout, ec: ExecutionContext): Unit = {
-    val future = actorRef ? { ref =>
-      UserTokenActor.GetAllTwitchAuthTokens(ref)
-    }
-    future.onComplete {
-      case scala.util.Success(resp: UserTokenActor.AuthResponse) =>
-        resp match {
-          case UserTokenActor.AllAuthTokensFound(tokens) =>
-            has.replyTo ! HasAuth(tokens.nonEmpty)
-          case UserTokenActor.Error(msg) =>
-            has.replyTo ! HasAuth(false)
-          case other =>
-            has.replyTo ! HasAuth(false)
-        }
-      case scala.util.Failure(_) =>
-        has.replyTo ! HasAuth(false)
-    }(ec)
+  private def handleFailure[Cmd](
+      cmd: Cmd,
+      ex: Throwable
+  ): Unit = cmd match {
+    case register: RegisterTwitchAuthToken =>
+      register.replyTo ! Error(s"Command failed: ${ex.getMessage}")
+    case get: GetTwitchAuthToken =>
+      get.replyTo ! Error(s"Command failed: ${ex.getMessage}")
+    case getAll: GetAllTwitchAuthTokens =>
+      getAll.replyTo ! Error(s"Command failed: ${ex.getMessage}")
+    case update: UpdateTwitchAuthToken =>
+      update.replyTo ! UpdateFailed(s"Command failed: ${ex.getMessage}")
+    case revoke: RevokeTwitchAuthToken =>
+      revoke.replyTo ! UpdateFailed(s"Command failed: ${ex.getMessage}")
+    case _: HasTwitchAuth =>
+      cmd.asInstanceOf[HasTwitchAuth].replyTo ! HasAuth(false)
   }
 
   private def getOrCreateUserActor(
