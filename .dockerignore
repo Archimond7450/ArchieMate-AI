@@ -20,6 +20,7 @@ frontend/target/
 frontend/node_modules/
 frontend/dist/
 frontend-test/node_modules/
+shared/target/
 
 # sbt cache (not build.sbt itself)
 *.sbt.lock
