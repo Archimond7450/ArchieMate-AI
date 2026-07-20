@@ -85,9 +85,9 @@ object ArchieMateApp {
 
       Behaviors.receiveMessage {
         case StartHttp =>
-          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, classicSystem.classicSystem)
+          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, userTokenRegistry, classicSystem.classicSystem)
           val authRoutes = new AuthRoutes(
-            appConfig.twitch,
+            appConfig,
             twitchOAuthActor,
             userTokenRegistry,
             jwtActor,

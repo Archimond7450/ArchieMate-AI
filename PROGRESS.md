@@ -67,7 +67,10 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 | Commit | Description |
 |--------|-------------|  
-| xxxxxxx | docs: add best practice — prefer short import paths over fully qualified names |
+| xxxxxxx | feat: add JWT token refresh — /auth/refresh endpoint, UserStore.refresh(), automatic retry on /api/v1/me failure |
+| xxxxxxx | feat: add Twitch OAuth login with HTTP-only cookie auth — remove frontend token storage, add /api/v1/logout and /api/v1/twitch/me endpoints |
+| xxxxxxx | feat: add Dashboard page and UserMenu component — show Twitch avatar + display name in header, dropdown menu for logged-in users |
+| xxxxxxx | feat: implement Twitch OAuth callback to set HTTP-only session cookie holding JWT (no localStorage) |
 | xxxxxxx | feat: add TwitchApiActor — dedicated actor for Twitch token refresh and user info retrieval |
 | xxxxxxx | feat: complete Phase 7 auth flow — UserTokenRegistry, wire callback to store tokens + issue JWT |
 | xxxxxxx | feat: add UserTokenRegistry actor to manage per-user UserTokenActor instances |
@@ -80,6 +83,28 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 | 85e83e4 | chore: rewrite PROGRESS.md — fix duplication, update completed work, add recent commits |
 
 ## In Progress
+
+### Phase 11: Frontend Auth & Dashboard ✅ COMPLETE
+- [x] UserStore with HTTP-only cookie auth (no localStorage)
+- [x] /api/v1/me endpoint reads JWT from cookie
+- [x] /api/v1/logout POST endpoint clears cookie
+- [x] /api/v1/twitch/me endpoint returns Twitch profile
+- [x] Dashboard page at /dashboard (accessible to logged-in users)
+- [x] UserMenu component — avatar dropdown with Dashboard + Logout
+- [x] Header shows login button when not logged in, avatar when logged in
+- [x] Mobile menu includes login/dashboard/logout links
+- [x] checkLogin() on app mount to detect existing session
+- [x] All backend tests pass
+- [x] All frontend tests pass
+
+### JWT Token Refresh ✅ COMPLETE
+- [x] JwtActor.Refresh command — decodes existing token, re-encodes with fresh expiry
+- [x] JwtActorSpec tests for refresh (valid token, invalid token)
+- [x] /auth/refresh GET endpoint — reads JWT cookie, calls JwtActor, sets new cookie, redirects
+- [x] AuthRoutesSpec — 6 tests covering all refresh scenarios
+- [x] UserStore.refresh() — calls /auth/refresh, follows redirect to reload with fresh cookie
+- [x] checkLogin() calls refresh() automatically when /api/v1/me fails (token expired)
+- [x] All 84 backend tests pass
 
 ### Phase 8: Actor System ✅ COMPLETE
 - [x] Rewrite ArchieMateMediator to accept ActorRefs at construction (avoids config/dependency injection)
@@ -109,8 +134,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] UserTokenRegistry actor (manages per-user UserTokenActor instances)
 - [x] Token refresh mechanism (TwitchApiActor.RefreshToken command)
 - [x] User info retrieval (TwitchApiActor.GetUserById, GetCurrentUser, GetUserByLogin)
-- [ ] Authenticated route middleware / context propagation
-- [ ] Logout endpoint
+- [x] Logout endpoint (`/api/v1/logout`)
 
 ## TODO
 
@@ -133,7 +157,6 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] TwitchApiActor (token refresh + user info — see below)
 - [ ] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
 - [ ] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
-- [ ] Dashboard page with platform connection UI
 - [ ] API endpoints for connection CRUD (`/api/v1/connections/...`)
 
 ### Phase 10: Chatbot Features
@@ -165,8 +188,8 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 ## Suggested Next Steps
 
 1. **Phase 9 - Platform Connections**: Wire TwitchApiActor into ArchieMateApp, add Kick/YouTube platform actors, and build dashboard UI for managing connections.
-2. **Phase 7 - Complete Auth flow**: Add authenticated route middleware / context propagation, logout endpoint.
-3. **Phase 10 - Chatbot Features**: Implement the core chatbot command system.
+2. **Phase 10 - Chatbot Features**: Implement the core chatbot command system.
+3. **Phase 12 - Production Hardening**: Health checks, metrics, rate limiting, CORS.
 
 ## Notes
 

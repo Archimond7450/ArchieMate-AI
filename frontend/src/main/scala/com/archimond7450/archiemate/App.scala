@@ -3,7 +3,7 @@ package com.archimond7450.archiemate
 import com.raquo.laminar.api.L.{*, given}
 import com.raquo.waypoint._
 import com.archimond7450.archiemate.components.{Footer, Header}
-import com.archimond7450.archiemate.pages.{AboutPage => PageAboutPage, DocsPage => PageDocsPage, HomePage => PageHomePage}
+import com.archimond7450.archiemate.pages.{AboutPage => PageAboutPage, DashboardPage => PageDashboardPage, DocsPage => PageDocsPage, HomePage => PageHomePage}
 import org.scalajs.dom
 import scala.scalajs.js.annotation.JSExportTopLevel
 
@@ -12,27 +12,31 @@ sealed trait Page
 case object HomePage extends Page
 case object AboutPage extends Page
 case object DocsPage extends Page
+case object DashboardPage extends Page
 
-private val allPages: List[Page] = List(HomePage, AboutPage, DocsPage)
+private val allPages: List[Page] = List(HomePage, AboutPage, DocsPage, DashboardPage)
 
 object App {
 
   private val serializePage: Page => String = {
-    case HomePage => "/"
-    case AboutPage => "/about"
-    case DocsPage => "/docs"
+    case HomePage      => "/"
+    case AboutPage     => "/about"
+    case DocsPage      => "/docs"
+    case DashboardPage => "/dashboard"
   }
 
   private val router: Router[Page] = Router[Page](
     routes = List(
       Route.static(AboutPage, root / "about"),
       Route.static(DocsPage, root / "docs"),
+      Route.static(DashboardPage, root / "dashboard"),
       Route.static(HomePage, root)
     ),
     getPageTitle = {
-      case HomePage => "Home"
-      case AboutPage => "About"
-      case DocsPage => "Docs"
+      case HomePage      => "Home"
+      case AboutPage     => "About"
+      case DocsPage      => "Docs"
+      case DashboardPage => "Dashboard"
     },
     serializePage = serializePage,
     deserializePage = url =>
@@ -45,6 +49,8 @@ object App {
   def mount(): Unit = {
     // Initialize dark mode from localStorage or system preference
     DarkMode.init()
+    // Check if user is logged in (backend reads HTTP-only cookie)
+    UserStore.checkLogin()
     renderTo("#app")
   }
 
@@ -56,6 +62,7 @@ object App {
       .collectStatic(HomePage) { PageHomePage.render() }
       .collectStatic(AboutPage) { PageAboutPage.render() }
       .collectStatic(DocsPage) { PageDocsPage.render() }
+      .collectStatic(DashboardPage) { PageDashboardPage.render() }
 
     val contentEl = div(
       className := "flex-grow",

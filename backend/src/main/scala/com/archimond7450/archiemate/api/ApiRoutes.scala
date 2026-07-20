@@ -5,6 +5,7 @@ import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.{*, given}
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
 import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.model.headers.Authorization
 import org.apache.pekko.http.scaladsl.server.Directives.*
@@ -15,6 +16,7 @@ import com.archimond7450.archiemate.auth.AuthDirectives
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.settings.*
 import com.archimond7450.archiemate.twitch.TwitchApiActor
+import com.archimond7450.archiemate.user.UserTokenRegistry
 import io.circe.Encoder
 import io.circe.generic.semiauto.deriveEncoder
 import io.circe.syntax.EncoderOps
@@ -23,10 +25,22 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 import scala.util.{Failure, Success}
 
+/** Name of the cookie holding the JWT token. */
+private val JwtCookieName = "archiemate_jwt"
+
 final case class AuthResponse(userId: String)
 
 object AuthResponse {
   given Encoder[AuthResponse] = deriveEncoder
+}
+
+final case class TwitchProfileResponse(
+    display_name: String,
+    profile_image_url: String
+)
+
+object TwitchProfileResponse {
+  given Encoder[TwitchProfileResponse] = deriveEncoder
 }
 
 class ApiRoutes(
@@ -34,6 +48,7 @@ class ApiRoutes(
     readinessTracker: ActorRef[ReadinessTracker.Command],
     jwtActor: ActorRef[JwtActor.Command],
     twitchApiActor: ActorRef[TwitchApiActor.Command],
+    userTokenRegistry: ActorRef[UserTokenRegistry.Command],
     classicActorSystem: ActorSystem
 ) {
 
@@ -70,17 +85,91 @@ class ApiRoutes(
             given Timeout = Timeout(3.seconds)
             given ExecutionContext = scala.concurrent.ExecutionContext.global
             extractRequest { request =>
-              request.header[Authorization] match {
-                case Some(Authorization(credentials)) =>
-                  val token = credentials.value
-                  onComplete(AuthDirectives.authenticateToken(token, jwtActor)) {
+              // First try cookie-based auth (HTTP-only cookie)
+              request.cookies.find(_.name == JwtCookieName) match {
+                case Some(cookie) =>
+                  onComplete(AuthDirectives.authenticateToken(cookie.value, jwtActor)) {
                     case Success(Right(userId)) =>
                       complete(StatusCodes.OK -> AuthResponse(userId).asJson.noSpaces)
                     case Success(Left(_))       => complete(StatusCodes.Unauthorized -> "Invalid token")
                     case Failure(_)             => complete(StatusCodes.Unauthorized -> "Token authentication failed")
                   }
                 case None =>
-                  complete(StatusCodes.Unauthorized -> "Missing Authorization header")
+                  // Fall back to Authorization header for backwards compatibility
+                  request.header[Authorization] match {
+                    case Some(Authorization(credentials)) =>
+                      val token = credentials.value
+                      onComplete(AuthDirectives.authenticateToken(token, jwtActor)) {
+                        case Success(Right(userId)) =>
+                          complete(StatusCodes.OK -> AuthResponse(userId).asJson.noSpaces)
+                        case Success(Left(_))       => complete(StatusCodes.Unauthorized -> "Invalid token")
+                        case Failure(_)             => complete(StatusCodes.Unauthorized -> "Token authentication failed")
+                      }
+                    case None =>
+                      complete(StatusCodes.Unauthorized -> "Missing authentication")
+                  }
+              }
+            }
+          }
+        } ~
+        // Logout endpoint
+        path("logout") {
+          post {
+            val cookie = HttpCookie(
+              JwtCookieName,
+              "",
+              httpOnly = true,
+              secure = true,
+              maxAge = Some(0L)
+            )
+            setCookie(cookie) {
+              complete(StatusCodes.OK)
+            }
+          }
+        } ~
+        // Twitch user info
+        path("twitch" / "me") {
+          get {
+            given Scheduler = classicActorSystem.toTyped.scheduler
+            given Timeout = Timeout(3.seconds)
+            given ExecutionContext = scala.concurrent.ExecutionContext.global
+            extractRequest { request =>
+              request.cookies.find(_.name == JwtCookieName) match {
+                case Some(cookie) =>
+                  onComplete(AuthDirectives.authenticateToken(cookie.value, jwtActor)) {
+                    case Success(Right(userId)) =>
+                      // Get the user's Twitch access token from the registry
+                      onComplete(
+                        userTokenRegistry.ask[UserTokenRegistry.GetResponse](ref =>
+                          UserTokenRegistry.GetAllTwitchAuthTokens(userId, ref)
+                        )
+                      ) {
+                        case Success(UserTokenRegistry.AllTokensFound(tokens)) if tokens.nonEmpty =>
+                          val token = tokens.head
+                          onComplete(
+                            twitchApiActor.ask[TwitchApiActor.TokenResponse](ref =>
+                              TwitchApiActor.GetCurrentUser(token.accessToken, ref)
+                            )
+                          ) {
+                            case Success(TwitchApiActor.UserFound(_, _, displayName)) =>
+                              complete(StatusCodes.OK -> TwitchProfileResponse(displayName, "").asJson.noSpaces)
+                            case Success(TwitchApiActor.Error(msg)) =>
+                              complete(StatusCodes.InternalServerError -> msg)
+                            case Failure(ex) =>
+                              complete(StatusCodes.InternalServerError -> ex.getMessage)
+                          }
+                        case Success(UserTokenRegistry.AllTokensFoundEmpty) =>
+                          complete(StatusCodes.NotFound -> "No Twitch auth found")
+                        case Success(UserTokenRegistry.Error(msg)) =>
+                          complete(StatusCodes.InternalServerError -> msg)
+                        case Failure(ex) =>
+                          complete(StatusCodes.InternalServerError -> ex.getMessage)
+                      }
+                    case Success(Left(_))       => complete(StatusCodes.Unauthorized -> "Invalid token")
+                    case Failure(_)             => complete(StatusCodes.Unauthorized -> "Token authentication failed")
+                  }
+                case None =>
+                  complete(StatusCodes.Unauthorized -> "Missing authentication")
               }
             }
           }

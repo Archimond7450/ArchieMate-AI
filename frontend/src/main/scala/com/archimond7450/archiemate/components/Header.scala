@@ -1,6 +1,6 @@
 package com.archimond7450.archiemate.components
 
-import com.archimond7450.archiemate.{DarkMode, HomePage, AboutPage, DocsPage, Page}
+import com.archimond7450.archiemate.{DarkMode, HomePage, AboutPage, DocsPage, Page, UserStore}
 import com.raquo.laminar.api.L.{*, given}
 import com.raquo.waypoint.Router
 import org.scalajs.dom
@@ -149,7 +149,7 @@ object Header {
               }
             )
           ),
-          // Dark mode toggle + mobile menu button
+          // Dark mode toggle + user menu / login button + mobile menu button
           div(
             cls("flex items-center gap-2"),
             // Dark mode toggle (always visible)
@@ -167,6 +167,29 @@ object Header {
                   Seq(sunSvg)
                 } else {
                   Seq(moonSvg)
+                }
+              }
+            ),
+            // User menu (desktop, logged in) or login button (desktop, not logged in)
+            div(
+              cls("hidden md:flex items-center gap-2"),
+              children <-- UserStore.isLoggedIn.signal.map { loggedIn =>
+                if (loggedIn) {
+                  Seq(UserMenu.render(router))
+                } else {
+                  Seq(
+                    a(
+                      cls(
+                        "px-3 py-2 text-sm font-semibold rounded-md",
+                        "text-indigo-600 dark:text-indigo-400",
+                        "bg-indigo-50 dark:bg-indigo-900/30",
+                        "hover:bg-indigo-100 dark:hover:bg-indigo-900/50",
+                        "transition-colors"
+                      ),
+                      href("/auth/twitch/login"),
+                      "Log in"
+                    )
+                  )
                 }
               }
             ),
@@ -195,7 +218,35 @@ object Header {
         div(
           cls("px-2 pt-2 pb-3 space-y-1 sm:px-3"),
           children <-- mobileMenuOpen.signal.map {
-            case true => pages.map(renderMobileNavItem)
+            case true =>
+              val pageLinks = pages.map(renderMobileNavItem)
+              // Login link in mobile menu when not logged in
+              if (!UserStore.isLoggedIn.now()) {
+                Seq(
+                  a(
+                    cls("px-3 py-2 text-sm font-semibold rounded-md text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30"),
+                    href("/auth/twitch/login"),
+                    "Log in"
+                  )
+                ) ++ pageLinks
+              } else {
+                // Dashboard link in mobile menu when logged in
+                pageLinks ++ Seq(
+                  a(
+                    cls("px-3 py-2 text-sm font-semibold rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"),
+                    href("/dashboard"),
+                    "Dashboard"
+                  ),
+                  button(
+                    cls("w-full text-left px-3 py-2 text-sm font-semibold rounded-md text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"),
+                    onClick --> { (_: dom.Event) =>
+                      mobileMenuOpen.set(false)
+                      UserStore.logout()
+                    },
+                    "Log out"
+                  )
+                )
+              }
             case false => Seq.empty
           }
         )

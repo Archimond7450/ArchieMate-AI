@@ -6,6 +6,7 @@ import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, ServerConfig, TwitchConfig}
 import com.archimond7450.archiemate.twitch.TwitchApiActor
+import com.archimond7450.archiemate.user.UserTokenRegistry
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
 import org.apache.pekko.actor.typed.Scheduler
@@ -65,11 +66,16 @@ class ApiRoutesSpec
     TestProbe[TwitchApiActor.Command]("twitch-api-actor")
   private val twitchApiActor = twitchApiProbe.ref
 
+  private val userTokenRegistryProbe: TestProbe[UserTokenRegistry.Command] =
+    TestProbe[UserTokenRegistry.Command]("user-token-registry")
+  private val userTokenRegistry = userTokenRegistryProbe.ref
+
   private val apiRoutes = new ApiRoutes(
     testConfig,
     readinessTracker,
     jwtActor,
     twitchApiActor,
+    userTokenRegistry,
     classicSystem
   ).apiRoutes
 
