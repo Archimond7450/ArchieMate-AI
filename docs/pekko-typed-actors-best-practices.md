@@ -9,13 +9,13 @@ Guidelines for writing clean, idiomatic Pekko Typed actors in Scala.
 **Larger actors** — those needing timers, stash, context wiring, or multi-phase initialization — use a companion `object` that instantiates a class, and a `class` that exposes only `initial` as its public API.
 
 ## Command Trait
-The command trait **must always be sealed** and **must always be named `Command`**. All case classes and case objects inside it **must be final** so that the compiler can warn about unexhaustive pattern matches.
+The command trait **must always be sealed** and **must always be named `Command`**. All case classes inside it **must be `final case class`** (case classes are extendable in Scala 3, so `final` is required). Case objects are final by default in Scala 3, so `final` on `case object` is redundant and should be omitted.
 
 ```scala
 sealed trait Command
 final case class Register(actorRef: ActorRef[Ready]) extends Command
 final case class CheckReadiness(replyTo: ActorRef[ReadinessResponse]) extends Command
-final case object Ready extends Command
+case object Ready extends Command
 ```
 
 ## Per-Command Response Traits

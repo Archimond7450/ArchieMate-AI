@@ -189,7 +189,7 @@ object UserTokenActor {
   final case class AuthRevoked(id: String) extends AuthResponse
   final case class AuthFound(token: PlatformToken) extends AuthResponse
   final case class AllAuthTokensFound(tokens: List[PlatformToken]) extends AuthResponse
-  final case object AuthNotFound extends AuthResponse
+  case object AuthNotFound extends AuthResponse
 
   final case class ConnectionRegistered(platform: String, channelId: String) extends ConnectionResponse
   final case class ConnectionUpdated(platform: String, channelId: String) extends ConnectionResponse

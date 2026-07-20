@@ -72,6 +72,17 @@ See [pekko-typed-actors-best-practices.md](docs/pekko-typed-actors-best-practice
 ## Scala Best Practices
 See [scala-best-practices.md](docs/scala-best-practices.md) for conventions on Scala 3 syntax, given/using, extension methods, implicit conversions, and circe JSON encoding/decoding.
 
+## Compiler Warnings
+**Always solve all compiler warnings — never leave them unaddressed.** The most common and important ones:
+
+- **Non-exhaustive match** — every `match` must cover all cases. If you intentionally ignore some cases, use `case _ =>` with an explicit comment explaining why.
+- **Unused imports / variables / values** — remove them or use them.
+- **Pattern shadowing** — rename variables that shadow outer scope names.
+- **Deprecated APIs** — migrate to the non-deprecated alternative.
+- **Redundant `final` on `case object`** — case objects are final by default in Scala 3, so `final` is unnecessary and should be omitted.
+
+A clean build with zero warnings is the minimum standard before committing or creating a PR.
+
 ## ScalaTest
 Prefer `AnyWordSpecLike` over `AnyWordSpec` for all ScalaTest suites. Actor tests must extend both `ScalaTestWithActorTestKit` and `AnyWordSpecLike`.
 
