@@ -21,9 +21,9 @@ test.describe('Mobile Menu', () => {
     // Click hamburger to open
     await hamburgerButton.click();
 
-    // Menu should now be visible with navigation links
+    // Menu should now be visible with navigation links (Log in + Home/About/Docs)
     mobileLinks = await page.locator('div.space-y-1 a').all();
-    expect(mobileLinks.length).toBe(3);
+    expect(mobileLinks.length).toBe(4);
   });
 
   test('clicking hamburger again closes mobile menu', async ({ page }) => {
@@ -34,7 +34,7 @@ test.describe('Mobile Menu', () => {
     // Open menu
     await hamburgerButton.click();
     let mobileLinks = await page.locator('div.space-y-1 a').all();
-    expect(mobileLinks.length).toBe(3);
+    expect(mobileLinks.length).toBe(4);
 
     // Close menu
     await hamburgerButton.click();
@@ -104,7 +104,7 @@ test.describe('Mobile Menu', () => {
     // Open mobile menu
     await hamburgerButton.click();
     let mobileLinks = await page.locator('div.space-y-1 a').all();
-    expect(mobileLinks.length).toBe(3);
+    expect(mobileLinks.length).toBe(4);
 
     // Toggle dark mode while menu is open
     await darkModeButton.click();
@@ -112,7 +112,7 @@ test.describe('Mobile Menu', () => {
 
     // Menu should still be open
     mobileLinks = await page.locator('div.space-y-1 a').all();
-    expect(mobileLinks.length).toBe(3);
+    expect(mobileLinks.length).toBe(4);
   });
 
   test('mobile menu is accessible via aria-expanded', async ({ page }) => {
