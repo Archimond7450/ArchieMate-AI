@@ -63,65 +63,22 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] pekko-typed-actors-best-practices.md
 - [x] scala-best-practices.md
 
-| xxxxxxx | feat: add ConnectionRoutes — CRUD API for platform connections (GET/POST/DELETE /api/v1/connections) |
-| xxxxxxx | feat: add YoutubeApiActor — dedicated actor for YouTube API (token refresh, user info), YoutubeConfig, wire into ArchieMateApp |
-| xxxxxxx | feat: add KickApiActor — dedicated actor for Kick API (token refresh, user info), KickConfig, wire into ArchieMateApp |
-| xxxxxxx | feat: add Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens) |
-
 ## Recent Work (Last 10 Commits)
 
 | Commit | Description |
-|--------|-------------|  
-| xxxxxxx | feat: add JWT token refresh — /auth/refresh endpoint, UserStore.refresh(), automatic retry on /api/v1/me failure |
-| xxxxxxx | feat: add Twitch OAuth login with HTTP-only cookie auth — remove frontend token storage, add /api/v1/logout and /api/v1/twitch/me endpoints |
-| xxxxxxx | feat: add Dashboard page and UserMenu component — show Twitch avatar + display name in header, dropdown menu for logged-in users |
-| xxxxxxx | feat: implement Twitch OAuth callback to set HTTP-only session cookie holding JWT (no localStorage) |
-| xxxxxxx | feat: add TwitchApiActor — dedicated actor for Twitch token refresh and user info retrieval |
-| xxxxxxx | feat: complete Phase 7 auth flow — UserTokenRegistry, wire callback to store tokens + issue JWT |
-| xxxxxxx | feat: add UserTokenRegistry actor to manage per-user UserTokenActor instances |
-| b6ecbc6 | feat: add Twitch OAuth flow with /auth/twitch/login and /auth/twitch/callback |
-| 4a89ba0 | feat: integrate ArchieMateMediator with HttpClientActor and complete Phase 8 actor system |
-| aeb9af2 | feat: add HttpClientActor with 6 passing tests |
-| 8484d4a | feat: add JWT actor with per-command response types and auth directives |
-| 5d4eee3 | feat: add Phase 7 (Auth) and Phase 9 (Platform Connections) to TODO |
-| xxxxxxx | feat: add UserTokenActor (persistent OAuth token storage) with 15 passing tests |
-| 85e83e4 | chore: rewrite PROGRESS.md — fix duplication, update completed work, add recent commits |
+|--------|-------------|
+| 8f9cb6d | feat: add ConnectionRoutes — CRUD API for platform connections (GET/POST/DELETE /api/v1/connections) |
+| 5748f63 | feat: add Kick and YouTube platform actors — KickApiActor, YoutubeApiActor, KickConfig, YoutubeConfig, wire into ArchieMateApp |
+| 8b0267f | chore: ignore metals.sbt in project and project/project |
+| a6d3cc0 | chore: add metals.sbt to .gitignore |
+| 036f291 | refactor: rename callbackBaseUrl and callbackPath for clarity |
+| b3f7e7d | refactor: move redirectUriPrefix from TwitchConfig to AppConfig |
+| e46ce56 | feat: add configurable Twitch redirect URI prefix with secure cookie logic |
+| c65cbee | feat: add administrator page with configurable admin user ID |
+| c60b5aa | feat: make ask timeout configurable via application.conf and ASK_TIMEOUT env var |
+| 67d2895 | docs: clarify that only case object needs 'final', not case class |
 
-## In Progress
-
-### Phase 11: Frontend Auth & Dashboard ✅ COMPLETE
-- [x] UserStore with HTTP-only cookie auth (no localStorage)
-- [x] /api/v1/me endpoint reads JWT from cookie
-- [x] /api/v1/logout POST endpoint clears cookie
-- [x] /api/v1/twitch/me endpoint returns Twitch profile
-- [x] Dashboard page at /dashboard (accessible to logged-in users)
-- [x] UserMenu component — avatar dropdown with Dashboard + Logout
-- [x] Header shows login button when not logged in, avatar when logged in
-- [x] Mobile menu includes login/dashboard/logout links
-- [x] checkLogin() on app mount to detect existing session
-- [x] All backend tests pass
-- [x] All frontend tests pass
-
-### JWT Token Refresh ✅ COMPLETE
-- [x] JwtActor.Refresh command — decodes existing token, re-encodes with fresh expiry
-- [x] JwtActorSpec tests for refresh (valid token, invalid token)
-- [x] /auth/refresh GET endpoint — reads JWT cookie, calls JwtActor, sets new cookie, redirects
-- [x] AuthRoutesSpec — 6 tests covering all refresh scenarios
-- [x] UserStore.refresh() — calls /auth/refresh, follows redirect to reload with fresh cookie
-- [x] checkLogin() calls refresh() automatically when /api/v1/me fails (token expired)
-- [x] All 84 backend tests pass
-
-### Phase 8: Actor System ✅ COMPLETE
-- [x] Rewrite ArchieMateMediator to accept ActorRefs at construction (avoids config/dependency injection)
-- [x] Update ArchieMateApp to spawn HttpClientActor and ArchieMateMediator
-- [x] Update ApiRoutes to accept mediator alongside readinessTracker and jwtActor
-- [x] Keep AuthDirectives.authenticateToken using direct jwtActor ref (ask-through-mediator breaks response routing)
-- [x] Add HttpClientConfig to AppConfig with maxConnections and maxIdleTimeoutMinutes
-- [x] Fix ArchieMateMediatorSpec with unique actor names per test (resolved InvalidActorNameException)
-- [x] Add ArchieMateMediatorIntegrationSpec — 5 tests: GET/POST routing, concurrent messages, error propagation, status code preservation
-- [x] All 63 tests pass
-- [x] HttpClientActor with StatusReply, Http().singleRequest, internal Unmarshal
-- [x] All Phase 8 items complete — mediator infrastructure ready for platform actors
+## Completed
 
 ### Phase 7: Authentication ✅ COMPLETE
 - [x] JWT actor (encode, decode, validate with expiration, refresh)
@@ -141,7 +98,14 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] User info retrieval (TwitchApiActor.GetUserById, GetCurrentUser, GetUserByLogin)
 - [x] Logout endpoint (`/api/v1/logout`)
 
-## TODO
+### JWT Token Refresh ✅ COMPLETE
+- [x] JwtActor.Refresh command — decodes existing token, re-encodes with fresh expiry
+- [x] JwtActorSpec tests for refresh (valid token, invalid token)
+- [x] /auth/refresh GET endpoint — reads JWT cookie, calls JwtActor, sets new cookie, redirects
+- [x] AuthRoutesSpec — 6 tests covering all refresh scenarios
+- [x] UserStore.refresh() — calls /auth/refresh, follows redirect to reload with fresh cookie
+- [x] checkLogin() calls refresh() automatically when /api/v1/me fails (token expired)
+- [x] All 84 backend tests pass
 
 ### Phase 8: Actor System ✅ COMPLETE
 - [x] HttpClientActor (HTTP client for platform connections)
@@ -151,18 +115,36 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] Add SendHttpRequest command to ArchieMateMediator
 - [x] Update TwitchOAuthActor to use HttpRequestActor for HTTP calls
 - [x] Expand HttpRequestActorSpec from 1 to 5 tests (success, HTTP error, decode failure, connection error, concurrent)
-- [ ] Chat message actor
-- [ ] Event dispatcher actor
-- [ ] Command processing actor
-- [ ] Persistence with Pekko Persistence
-- [ ] Cluster support (future)
 
-### Phase 9: Platform Connection Management
+### Phase 9: Platform Connection Management ✅ COMPLETE
 - [x] TwitchApiActor (token refresh + user info — wired into ArchieMateApp)
 - [x] Platform connection persistent actor (stores per-user platform connections — part of UserTokenActor)
 - [x] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens — wired into ArchieMateApp)
 - [x] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens — wired into ArchieMateApp)
 - [x] API endpoints for connection CRUD (`/api/v1/connections/...` — GET list, GET by platform, POST register, DELETE revoke)
+- [x] ConnectionRoutes with full CRUD (GET/POST/DELETE /api/v1/connections)
+
+### Phase 11: Frontend Auth & Dashboard ✅ COMPLETE
+- [x] UserStore with HTTP-only cookie auth (no localStorage)
+- [x] /api/v1/me endpoint reads JWT from cookie
+- [x] /api/v1/logout POST endpoint clears cookie
+- [x] /api/v1/twitch/me endpoint returns Twitch profile
+- [x] Dashboard page at /dashboard (accessible to logged-in users)
+- [x] UserMenu component — avatar dropdown with Dashboard + Logout
+- [x] Header shows login button when not logged in, avatar when logged in
+- [x] Mobile menu includes login/dashboard/logout links
+- [x] checkLogin() on app mount to detect existing session
+- [x] All backend tests pass
+- [x] All frontend tests pass
+
+## TODO
+
+### Phase 8: Actor System
+- [ ] Chat message actor
+- [ ] Event dispatcher actor
+- [ ] Command processing actor
+- [ ] Persistence with Pekko Persistence
+- [ ] Cluster support (future)
 
 ### Phase 10: Chatbot Features
 - [ ] Command system (`!command` syntax)
@@ -192,8 +174,8 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## Suggested Next Steps
 
-1. **Phase 9 - Platform Connections**: Add Kick/YouTube platform actors (platform connection persistence is done in UserTokenActor), build API endpoints for connection CRUD, and build dashboard UI.
-2. **Phase 10 - Chatbot Features**: Implement the core chatbot command system.
+1. **Phase 10 - Chatbot Features**: Implement the core chatbot command system (command parsing, message filtering, custom responses).
+2. **Phase 11 - Frontend Pages**: Build Settings page and Chat viewer component.
 3. **Phase 12 - Production Hardening**: Health checks, metrics, rate limiting, CORS.
 
 ## Notes
