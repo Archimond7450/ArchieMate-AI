@@ -86,5 +86,8 @@ A clean build with zero warnings is the minimum standard before committing or cr
 ## ScalaTest
 Prefer `AnyWordSpecLike` over `AnyWordSpec` for all ScalaTest suites. Actor tests must extend both `ScalaTestWithActorTestKit` and `AnyWordSpecLike`.
 
+## Git Push
+**Never run `git push` inside the sandbox** — it is not available. As the user, you will push from your host terminal. The AI agent should only stage and commit changes.
+
 ## Progress
 See [PROGRESS.md](PROGRESS.md) for development tracking. **Always keep this file accurate and up-to-date:** mark items as completed when done, move completed items from TODO to Completed, and add a "Recent Work" section for the last 10–15 commits. Never let this file become stale, duplicated, or misleading — it is the primary mechanism for the AI agent to understand what has been done and what remains.

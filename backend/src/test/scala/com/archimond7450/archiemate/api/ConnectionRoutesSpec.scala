@@ -21,12 +21,6 @@ import pdi.jwt.{JwtAlgorithm, JwtClaim, JwtCirce}
 
 import scala.concurrent.duration._
 
-/** Tests for [[ConnectionRoutes]].
-  *
-  * TODO: Fix async onComplete pattern — the route's onComplete callback is
-  * asynchronous and the test framework's check waits for the route to complete
-  * before the callback fires. Need to use a different testing pattern.
-  */
 class ConnectionRoutesSpec
     extends AnyWordSpecLike
     with Matchers
@@ -69,11 +63,11 @@ class ConnectionRoutesSpec
     askTimeout = 5.seconds
   )
 
-  private val classicSystem: ActorSystem = ActorSystem("test-classic-connroutes")
+  private val testClassicSystem: ActorSystem = ActorSystem("test-classic-connroutes")
   private given ClassicActorSystemProvider = new ClassicActorSystemProvider {
-    def classicSystem = classicSystem
+    def classicSystem: ActorSystem = testClassicSystem
   }
-  private val typedSystem: TypedActorSystem[Nothing] = classicSystem.toTyped
+  private val typedSystem: TypedActorSystem[Nothing] = testClassicSystem.toTyped
   private given TypedActorSystem[Nothing] = typedSystem
   private val scheduler: Scheduler = typedSystem.scheduler
   private given Timeout = Timeout(10.seconds)
@@ -93,7 +87,7 @@ class ConnectionRoutesSpec
     scheduler,
     Timeout(10.seconds),
     scala.concurrent.ExecutionContext.global,
-    classicSystem
+    testClassicSystem
   ).connectionRoutes
 
   private def makeValidJwt(userId: String): String = {
@@ -105,25 +99,234 @@ class ConnectionRoutesSpec
     JwtCirce.encode(claim, testConfig.jwt.secret, JwtAlgorithm.HS256)
   }
 
+  /** Respond to a JWT DecodeAndValidate command from the probe.
+    */
+  private def respondToJwtDecode(probe: TestProbe[JwtActor.Command], userId: String, expectedToken: String): Unit = {
+    probe.receiveMessage() match {
+      case JwtActor.DecodeAndValidate(token, replyTo) =>
+        if (token == expectedToken) {
+          replyTo ! JwtActor.DecodeAndValidateSuccess(userId, java.time.Instant.now().plusSeconds(900))
+        } else {
+          replyTo ! JwtActor.Error("Invalid token")
+        }
+      case other => fail(s"Expected DecodeAndValidate, got $other")
+    }
+  }
+
+  /** Respond to a GetAllPlatformConnections command from the probe.
+    */
+  private def respondToGetAllConnections(
+      probe: TestProbe[UserTokenRegistry.Command],
+      userId: String,
+      platform: String
+  ): AllPlatformConnectionsFound = {
+    probe.receiveMessage() match {
+      case UserTokenRegistry.GetAllPlatformConnections(`userId`, `platform`, replyTo) =>
+        val response = AllPlatformConnectionsFound(List(
+          UserTokenActor.PlatformConnection(
+            platform, "channel-1", "access-1", "refresh-1",
+            java.time.Instant.now().plusSeconds(3600)
+          )
+        ))
+        replyTo ! response
+        response
+      case other => fail(s"Expected GetAllPlatformConnections($userId, $platform), got $other")
+    }
+  }
+
+  /** Respond to a RegisterPlatformConnection command from the probe.
+    */
+  private def respondToRegisterConnection(
+      probe: TestProbe[UserTokenRegistry.Command],
+      userId: String,
+      platform: String,
+      channelId: String
+  ): ConnectionRegistered = {
+    probe.receiveMessage() match {
+      case UserTokenRegistry.RegisterPlatformConnection(`userId`, `platform`, `channelId`, _, _, _, replyTo) =>
+        val response = ConnectionRegistered(platform, channelId)
+        replyTo ! response
+        response
+      case other => fail(s"Expected RegisterPlatformConnection($userId, $platform, $channelId), got $other")
+    }
+  }
+
+  /** Respond to a RevokePlatformConnection command from the probe.
+    */
+  private def respondToRevokeConnection(
+      probe: TestProbe[UserTokenRegistry.Command],
+      userId: String,
+      platform: String,
+      channelId: String
+  ): ConnectionRevoked = {
+    probe.receiveMessage() match {
+      case UserTokenRegistry.RevokePlatformConnection(`userId`, `platform`, `channelId`, replyTo) =>
+        val response = ConnectionRevoked(platform, channelId)
+        replyTo ! response
+        response
+      case other => fail(s"Expected RevokePlatformConnection($userId, $platform, $channelId), got $other")
+    }
+  }
+
   "GET /api/v1/connections" should {
-    "return 401 when no cookie is present" in pending
-    "return 401 when JWT is invalid" in pending
-    "return 200 with all connections when user has connections" in pending
+
+    "return 401 when no cookie is present" in {
+      Get("/api/v1/connections") ~> connectionRoutes ~> check {
+        status shouldEqual StatusCodes.Unauthorized
+      }
+    }
+
+    "return 401 when JWT is invalid" in {
+      val invalidToken = "invalid-token"
+      val test = Get("/api/v1/connections") ~>
+        addHeader(Cookie("archiemate_jwt", invalidToken)) ~>
+        connectionRoutes
+
+      // Respond with JWT error
+      jwtProbe.receiveMessage() match {
+        case JwtActor.DecodeAndValidate(token, replyTo) =>
+          replyTo ! JwtActor.Error("Invalid token")
+        case other => fail(s"Expected DecodeAndValidate, got $other")
+      }
+
+      test ~> check {
+        status shouldEqual StatusCodes.Unauthorized
+      }
+    }
+
+    "return 200 with all connections when user has connections" in {
+      val userId = "test-user-123"
+      val jwt = makeValidJwt(userId)
+
+      val test = Get("/api/v1/connections") ~>
+        addHeader(Cookie("archiemate_jwt", jwt)) ~>
+        connectionRoutes
+
+      // Respond to JWT decode
+      respondToJwtDecode(jwtProbe, userId, jwt)
+
+      // Respond to registry command
+      respondToGetAllConnections(userTokenRegistryProbe, userId, "*")
+
+      test ~> check {
+        status shouldEqual StatusCodes.OK
+      }
+    }
   }
 
   "GET /api/v1/connections/{platform}" should {
-    "return 401 when no cookie is present" in pending
-    "return 200 with platform connections" in pending
+
+    "return 401 when no cookie is present" in {
+      Get("/api/v1/connections/twitch") ~> connectionRoutes ~> check {
+        status shouldEqual StatusCodes.Unauthorized
+      }
+    }
+
+    "return 200 with platform connections" in {
+      val userId = "test-user-456"
+      val jwt = makeValidJwt(userId)
+      val platform = "twitch"
+
+      val test = Get(s"/api/v1/connections/$platform") ~>
+        addHeader(Cookie("archiemate_jwt", jwt)) ~>
+        connectionRoutes
+
+      // Respond to JWT decode
+      respondToJwtDecode(jwtProbe, userId, jwt)
+
+      // Respond to registry command
+      respondToGetAllConnections(userTokenRegistryProbe, userId, platform)
+
+      test ~> check {
+        status shouldEqual StatusCodes.OK
+      }
+    }
   }
 
   "POST /api/v1/connections/{platform}" should {
-    "return 401 when no cookie is present" in pending
-    "register a platform connection" in pending
-    "reject duplicate registration" in pending
+
+    "return 401 when no cookie is present" in {
+      Post("/api/v1/connections/twitch") ~> connectionRoutes ~> check {
+        status shouldEqual StatusCodes.Unauthorized
+      }
+    }
+
+    "register a platform connection" in {
+      val userId = "test-user-789"
+      val jwt = makeValidJwt(userId)
+      val platform = "twitch"
+      val channelId = "channel-1"
+      val body = s"""{"channelId":"$channelId","accessToken":"access-1","refreshToken":"refresh-1","expiresIn":3600}"""
+
+      val test = Post(s"/api/v1/connections/$platform", body) ~>
+        addHeader(Cookie("archiemate_jwt", jwt)) ~>
+        connectionRoutes
+
+      // Respond to JWT decode
+      respondToJwtDecode(jwtProbe, userId, jwt)
+
+      // Respond to registry command
+      respondToRegisterConnection(userTokenRegistryProbe, userId, platform, channelId)
+
+      test ~> check {
+        status shouldEqual StatusCodes.Created
+      }
+    }
+
+    "reject duplicate registration" in {
+      val userId = "test-user-789"
+      val jwt = makeValidJwt(userId)
+      val platform = "twitch"
+      val channelId = "channel-1"
+      val body = s"""{"channelId":"$channelId","accessToken":"access-1","refreshToken":"refresh-1","expiresIn":3600}"""
+
+      val test = Post(s"/api/v1/connections/$platform", body) ~>
+        addHeader(Cookie("archiemate_jwt", jwt)) ~>
+        connectionRoutes
+
+      // Respond to JWT decode
+      respondToJwtDecode(jwtProbe, userId, jwt)
+
+      // Respond with duplicate error
+      userTokenRegistryProbe.receiveMessage() match {
+        case UserTokenRegistry.RegisterPlatformConnection(`userId`, `platform`, `channelId`, _, _, _, replyTo) =>
+          replyTo ! Error(s"Connection for channel $channelId on $platform already registered")
+        case other => fail(s"Expected RegisterPlatformConnection, got $other")
+      }
+
+      test ~> check {
+        status shouldEqual StatusCodes.Conflict
+      }
+    }
   }
 
   "DELETE /api/v1/connections/{platform}" should {
-    "return 401 when no cookie is present" in pending
-    "revoke a platform connection" in pending
+
+    "return 401 when no cookie is present" in {
+      Delete("/api/v1/connections/twitch") ~> connectionRoutes ~> check {
+        status shouldEqual StatusCodes.Unauthorized
+      }
+    }
+
+    "revoke a platform connection" in {
+      val userId = "test-user-789"
+      val jwt = makeValidJwt(userId)
+      val platform = "twitch"
+      val channelId = "channel-789"
+
+      val test = Delete(s"/api/v1/connections/$platform") ~>
+        addHeader(Cookie("archiemate_jwt", jwt)) ~>
+        connectionRoutes
+
+      // Respond to JWT decode
+      respondToJwtDecode(jwtProbe, userId, jwt)
+
+      // Respond to registry command
+      respondToRevokeConnection(userTokenRegistryProbe, userId, platform, channelId)
+
+      test ~> check {
+        status shouldEqual StatusCodes.OK
+      }
+    }
   }
 }
