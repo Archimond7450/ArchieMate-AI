@@ -43,7 +43,8 @@ class AuthRoutesSpec
     httpClient = HttpClientConfig(
       maxConnections = 10,
       maxIdleTimeoutMinutes = 60
-    )
+    ),
+    askTimeout = 5.seconds
   )
 
   private val classicSystem: ActorSystem = ActorSystem("test-classic-authroutes")

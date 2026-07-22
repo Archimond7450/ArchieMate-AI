@@ -2,6 +2,7 @@ package com.archimond7450.archiemate.settings
 
 import com.typesafe.config.{Config, ConfigResolveOptions}
 import scala.jdk.CollectionConverters._
+import scala.concurrent.duration.*
 
 case class ServerConfig(
     host: String,
@@ -38,7 +39,8 @@ case class AppConfig(
     database: DatabaseConfig,
     jwt: JwtConfig,
     twitch: TwitchConfig,
-    httpClient: HttpClientConfig
+    httpClient: HttpClientConfig,
+    askTimeout: FiniteDuration
 )
 
 object AppConfig {
@@ -74,7 +76,8 @@ object AppConfig {
       httpClient = HttpClientConfig(
         maxConnections = resolveInt(resolved.getConfig("archiemate.http-client"), "max-connections", 10),
         maxIdleTimeoutMinutes = resolveInt(resolved.getConfig("archiemate.http-client"), "max-idle-timeout-minutes", 60)
-      )
+      ),
+      askTimeout = resolveDuration(resolved.getConfig("archiemate"), "ask-timeout", 5.seconds)
     )
   }
 
@@ -120,6 +123,28 @@ object AppConfig {
       } else {
         default
       }
+    }
+  }
+
+  private def resolveDuration(conf: Config, key: String, default: FiniteDuration): FiniteDuration = {
+    val envKey = key.toUpperCase.replace("-", "_")
+    sys.env.get(envKey).filter(_.nonEmpty).map(parseDuration).getOrElse {
+      if (conf.hasPathOrNull(key)) {
+        val value = conf.getString(key)
+        if (isUnresolvedSubstitution(value)) default else parseDuration(value)
+      } else {
+        default
+      }
+    }
+  }
+
+  private def parseDuration(s: String): FiniteDuration = {
+    val regex = """^(\d+)([smh])$""".r
+    s.trim match {
+      case regex(n, "s") => n.toLong.seconds
+      case regex(n, "m") => n.toLong.minutes
+      case regex(n, "h") => n.toLong.hours
+      case _ => throw new IllegalArgumentException(s"Invalid duration format: $s (expected e.g. '5s', '10m', '1h')")
     }
   }
 }

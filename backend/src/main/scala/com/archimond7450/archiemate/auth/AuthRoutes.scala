@@ -39,7 +39,7 @@ class AuthRoutes(
         path("login") {
           get {
             given Scheduler = classicActorSystem.toTyped.scheduler
-            given Timeout = Timeout(5.seconds)
+            given Timeout = Timeout(appConfig.askTimeout)
             given ExecutionContext = scala.concurrent.ExecutionContext.global
 
             val redirectUri = buildRedirectUri()
@@ -65,7 +65,7 @@ class AuthRoutes(
               (code, state) match {
                 case (Some(code), Some(state)) =>
                   given Scheduler = classicActorSystem.toTyped.scheduler
-                  given Timeout = Timeout(10.seconds)
+                  given Timeout = Timeout(appConfig.askTimeout)
                   given ExecutionContext = scala.concurrent.ExecutionContext.global
 
                   onComplete(twitchOAuthActor.ask[TwitchOAuthActor.TokenExchangeResponse](ref =>
@@ -138,7 +138,7 @@ class AuthRoutes(
             request.cookies.find(_.name == JwtCookieName) match {
                 case Some(cookie) if cookie.value.nonEmpty =>
                   given Scheduler = classicActorSystem.toTyped.scheduler
-                  given Timeout = Timeout(5.seconds)
+                  given Timeout = Timeout(appConfig.askTimeout)
                   given ExecutionContext = scala.concurrent.ExecutionContext.global
 
                   onComplete(

@@ -66,7 +66,7 @@ class ApiRoutes(
         path("ready") {
           get {
             given Scheduler = classicActorSystem.toTyped.scheduler
-            given Timeout = Timeout(3.seconds)
+            given Timeout = Timeout(config.askTimeout)
             given ExecutionContext = scala.concurrent.ExecutionContext.global
             onSuccess(
               readinessTracker.ask[ReadinessTracker.ReadinessResponse](ref =>
@@ -82,7 +82,7 @@ class ApiRoutes(
         path("me") {
           get {
             given Scheduler = classicActorSystem.toTyped.scheduler
-            given Timeout = Timeout(3.seconds)
+            given Timeout = Timeout(config.askTimeout)
             given ExecutionContext = scala.concurrent.ExecutionContext.global
             extractRequest { request =>
               // First try cookie-based auth (HTTP-only cookie)
@@ -131,7 +131,7 @@ class ApiRoutes(
         path("twitch" / "me") {
           get {
             given Scheduler = classicActorSystem.toTyped.scheduler
-            given Timeout = Timeout(3.seconds)
+            given Timeout = Timeout(config.askTimeout)
             given ExecutionContext = scala.concurrent.ExecutionContext.global
             extractRequest { request =>
               request.cookies.find(_.name == JwtCookieName) match {
