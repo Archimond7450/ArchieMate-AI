@@ -28,11 +28,11 @@ class AuthRoutes(
   private val JwtCookieName = "archiemate_jwt"
 
   private def buildRedirectUri(): String = {
-    appConfig.twitch.redirectUriPrefix + appConfig.twitch.redirectUriPostfix
+    appConfig.redirectUriPrefix + appConfig.twitch.redirectUriPostfix
   }
 
   private def isSecure: Boolean = {
-    appConfig.twitch.redirectUriPrefix.startsWith("https://")
+    appConfig.redirectUriPrefix.startsWith("https://")
   }
 
   def authRoutes: Route = {

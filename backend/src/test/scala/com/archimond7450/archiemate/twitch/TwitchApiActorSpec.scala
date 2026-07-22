@@ -52,7 +52,6 @@ class TwitchApiActorSpec
   private val twitchConfig: TwitchConfig = TwitchConfig(
     clientId = "test-client-id",
     clientSecret = "test-client-secret",
-    redirectUriPrefix = "http://localhost",
     redirectUriPostfix = "/auth/twitch/callback",
     scopes = List("chat:read", "chat:edit")
   )
