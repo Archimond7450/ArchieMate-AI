@@ -25,6 +25,7 @@ case class JwtConfig(
 case class TwitchConfig(
     clientId: String,
     clientSecret: String,
+    redirectUriPrefix: String,
     redirectUriPostfix: String,
     scopes: List[String]
 )
@@ -40,6 +41,7 @@ case class AppConfig(
     jwt: JwtConfig,
     twitch: TwitchConfig,
     httpClient: HttpClientConfig,
+    adminUserId: String,
     askTimeout: FiniteDuration
 )
 
@@ -70,6 +72,7 @@ object AppConfig {
       twitch = TwitchConfig(
         clientId = resolveString(twitchConf, "client-id", ""),
         clientSecret = resolveString(twitchConf, "client-secret", ""),
+        redirectUriPrefix = resolveString(twitchConf, "redirect-uri-prefix", ""),
         redirectUriPostfix = resolveString(twitchConf, "redirect-uri-postfix", ""),
         scopes = resolveScopes(twitchConf)
       ),
@@ -77,6 +80,7 @@ object AppConfig {
         maxConnections = resolveInt(resolved.getConfig("archiemate.http-client"), "max-connections", 10),
         maxIdleTimeoutMinutes = resolveInt(resolved.getConfig("archiemate.http-client"), "max-idle-timeout-minutes", 60)
       ),
+      adminUserId = resolveString(resolved.getConfig("archiemate"), "admin-user-id", ""),
       askTimeout = resolveDuration(resolved.getConfig("archiemate"), "ask-timeout", 5.seconds)
     )
   }

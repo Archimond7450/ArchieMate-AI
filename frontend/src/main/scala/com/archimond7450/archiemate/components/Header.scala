@@ -1,6 +1,6 @@
 package com.archimond7450.archiemate.components
 
-import com.archimond7450.archiemate.{DarkMode, HomePage, AboutPage, DocsPage, Page, UserStore}
+import com.archimond7450.archiemate.{AdministratorPage, DarkMode, DashboardPage, HomePage, AboutPage, DocsPage, Page, UserStore}
 import com.raquo.laminar.api.L.{*, given}
 import com.raquo.waypoint.Router
 import org.scalajs.dom
@@ -27,7 +27,12 @@ object Header {
     override val page: Page = DocsPage
   }
 
-  val pages: List[PageLink] = List(HomeLink, AboutLink, DocsLink)
+  case object DashboardLink extends PageLink {
+    override val label: String = "Dashboard"
+    override val page: Page = DashboardPage
+  }
+
+  val pages: List[PageLink] = List(HomeLink, AboutLink, DocsLink, DashboardLink)
 
   /** SVG icon for sun (light mode). */
   private def sunSvg: Element = {
@@ -80,6 +85,22 @@ object Header {
     )
   }
 
+  /** Link to the admin panel. */
+  private def adminLink(router: Router[Page]): Element = {
+    val isActive = router.currentPageSignal.map {
+      case AdministratorPage => true
+      case _ => false
+    }
+    a(
+      cls <-- isActive.map {
+        case true => "px-3 py-2 text-sm font-semibold rounded-md text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30"
+        case false => "px-3 py-2 text-sm font-semibold rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+      },
+      router.navigateTo(AdministratorPage),
+      "Admin"
+    )
+  }
+
   /** Close (X) SVG icon for the mobile menu. */
   private def closeSvg: Element = {
     svg.svg(
@@ -105,6 +126,8 @@ object Header {
         case HomePage => link.page == HomePage
         case AboutPage => link.page == AboutPage
         case DocsPage => link.page == DocsPage
+        case DashboardPage => link.page == DashboardPage
+        case AdministratorPage => link.page == AdministratorPage
       }
       a(
         cls <-- isActive.map {
@@ -137,6 +160,8 @@ object Header {
                   case HomePage => link.page == HomePage
                   case AboutPage => link.page == AboutPage
                   case DocsPage => link.page == DocsPage
+                  case DashboardPage => link.page == DashboardPage
+                  case AdministratorPage => link.page == AdministratorPage
                 }
                 a(
                   cls <-- isActive.map {
@@ -175,7 +200,11 @@ object Header {
               cls("hidden md:flex items-center gap-2"),
               children <-- UserStore.isLoggedIn.signal.map { loggedIn =>
                 if (loggedIn) {
-                  Seq(UserMenu.render(router))
+                  if (UserStore.isAdmin.now()) {
+                    Seq(UserMenu.render(router), adminLink(router))
+                  } else {
+                    Seq(UserMenu.render(router))
+                  }
                 } else {
                   Seq(
                     a(
@@ -229,6 +258,28 @@ object Header {
                     "Log in"
                   )
                 ) ++ pageLinks
+              } else if (UserStore.isAdmin.now()) {
+                // Dashboard + Admin links in mobile menu when logged in as admin
+                pageLinks ++ Seq(
+                  a(
+                    cls("px-3 py-2 text-sm font-semibold rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"),
+                    href("/dashboard"),
+                    "Dashboard"
+                  ),
+                  a(
+                    cls("px-3 py-2 text-sm font-semibold rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"),
+                    href("/admin"),
+                    "Administrator"
+                  ),
+                  button(
+                    cls("w-full text-left px-3 py-2 text-sm font-semibold rounded-md text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"),
+                    onClick --> { (_: dom.Event) =>
+                      mobileMenuOpen.set(false)
+                      UserStore.logout()
+                    },
+                    "Log out"
+                  )
+                )
               } else {
                 // Dashboard link in mobile menu when logged in
                 pageLinks ++ Seq(

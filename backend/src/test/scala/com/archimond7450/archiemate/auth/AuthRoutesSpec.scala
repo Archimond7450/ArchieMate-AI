@@ -37,6 +37,7 @@ class AuthRoutesSpec
     twitch = TwitchConfig(
       clientId = "test-client-id",
       clientSecret = "test-client-secret",
+      redirectUriPrefix = "http://localhost",
       redirectUriPostfix = "/auth/twitch/callback",
       scopes = List.empty
     ),
@@ -44,6 +45,7 @@ class AuthRoutesSpec
       maxConnections = 10,
       maxIdleTimeoutMinutes = 60
     ),
+    adminUserId = "",
     askTimeout = 5.seconds
   )
 

@@ -25,6 +25,9 @@ object UserStore {
   /** Whether the user is currently authenticated. */
   val isLoggedIn: Var[Boolean] = Var(false)
 
+  /** Whether the user is an administrator. */
+  val isAdmin: Var[Boolean] = Var(false)
+
   /** Signal version of isLoggedIn. */
   val isLoggedInSignal: Signal[Boolean] = isLoggedIn.signal
 
@@ -61,10 +64,12 @@ object UserStore {
     p.future.onComplete {
       case scala.util.Success(data) =>
         isLoggedIn.set(true)
+        isAdmin.set(data.is_admin != null && data.is_admin.asInstanceOf[Boolean])
         fetchUserProfile()
       case scala.util.Failure(_) =>
         // Token may have expired — try refreshing once
         isLoggedIn.set(false)
+        isAdmin.set(false)
         displayNameVar.set("")
         avatarUrlVar.set("")
         refresh()
@@ -121,6 +126,7 @@ object UserStore {
 
     fetch(s"$ApiBaseUrl/logout", init).`then` { (_: js.Any) =>
       isLoggedIn.set(false)
+      isAdmin.set(false)
       displayNameVar.set("")
       avatarUrlVar.set("")
       dom.window.location.href = "/"

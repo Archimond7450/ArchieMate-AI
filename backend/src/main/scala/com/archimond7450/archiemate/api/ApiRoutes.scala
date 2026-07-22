@@ -28,10 +28,18 @@ import scala.util.{Failure, Success}
 /** Name of the cookie holding the JWT token. */
 private val JwtCookieName = "archiemate_jwt"
 
-final case class AuthResponse(userId: String)
+final case class AuthResponse(userId: String, isAdmin: Boolean)
 
 object AuthResponse {
-  given Encoder[AuthResponse] = deriveEncoder
+  given Encoder[AuthResponse] = new Encoder[AuthResponse] {
+    def apply(a: AuthResponse): io.circe.Json = {
+      var fields = List[(String, io.circe.Json)]("user_id" -> io.circe.Json.fromString(a.userId))
+      if (a.isAdmin) {
+        fields = "is_admin" -> io.circe.Json.True :: fields
+      }
+      io.circe.Json.obj(fields: _*)
+    }
+  }
 }
 
 final case class TwitchProfileResponse(
@@ -90,7 +98,7 @@ class ApiRoutes(
                 case Some(cookie) =>
                   onComplete(AuthDirectives.authenticateToken(cookie.value, jwtActor)) {
                     case Success(Right(userId)) =>
-                      complete(StatusCodes.OK -> AuthResponse(userId).asJson.noSpaces)
+                      complete(StatusCodes.OK -> AuthResponse(userId, config.adminUserId == userId).asJson.noSpaces)
                     case Success(Left(_))       => complete(StatusCodes.Unauthorized -> "Invalid token")
                     case Failure(_)             => complete(StatusCodes.Unauthorized -> "Token authentication failed")
                   }
@@ -101,7 +109,7 @@ class ApiRoutes(
                       val token = credentials.value
                       onComplete(AuthDirectives.authenticateToken(token, jwtActor)) {
                         case Success(Right(userId)) =>
-                          complete(StatusCodes.OK -> AuthResponse(userId).asJson.noSpaces)
+                          complete(StatusCodes.OK -> AuthResponse(userId, config.adminUserId == userId).asJson.noSpaces)
                         case Success(Left(_))       => complete(StatusCodes.Unauthorized -> "Invalid token")
                         case Failure(_)             => complete(StatusCodes.Unauthorized -> "Token authentication failed")
                       }
