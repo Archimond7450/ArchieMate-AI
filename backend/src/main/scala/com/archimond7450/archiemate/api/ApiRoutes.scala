@@ -64,6 +64,16 @@ class ApiRoutes(
     classicActorSystem: ActorSystem
 ) {
 
+  private val connectionRoutes = new ConnectionRoutes(
+    config,
+    jwtActor,
+    userTokenRegistry,
+    classicActorSystem.toTyped.scheduler,
+    Timeout(config.askTimeout),
+    scala.concurrent.ExecutionContext.global,
+    classicActorSystem
+  ).connectionRoutes
+
   private val apiVersion = config.server.apiVersion
 
   def apiRoutes: Route = {
@@ -194,6 +204,8 @@ class ApiRoutes(
         }
       }
     } ~
+    // Connection routes
+    connectionRoutes ~
     // Serve static frontend files
     pathEndOrSingleSlash {
       getFromResource("public/index.html")

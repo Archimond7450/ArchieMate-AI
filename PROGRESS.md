@@ -63,6 +63,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] pekko-typed-actors-best-practices.md
 - [x] scala-best-practices.md
 
+| xxxxxxx | feat: add ConnectionRoutes — CRUD API for platform connections (GET/POST/DELETE /api/v1/connections) |
 | xxxxxxx | feat: add YoutubeApiActor — dedicated actor for YouTube API (token refresh, user info), YoutubeConfig, wire into ArchieMateApp |
 | xxxxxxx | feat: add KickApiActor — dedicated actor for Kick API (token refresh, user info), KickConfig, wire into ArchieMateApp |
 | xxxxxxx | feat: add Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens) |
@@ -161,7 +162,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] Platform connection persistent actor (stores per-user platform connections — part of UserTokenActor)
 - [x] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens — wired into ArchieMateApp)
 - [x] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens — wired into ArchieMateApp)
-- [ ] API endpoints for connection CRUD (`/api/v1/connections/...`)
+- [x] API endpoints for connection CRUD (`/api/v1/connections/...` — GET list, GET by platform, POST register, DELETE revoke)
 
 ### Phase 10: Chatbot Features
 - [ ] Command system (`!command` syntax)

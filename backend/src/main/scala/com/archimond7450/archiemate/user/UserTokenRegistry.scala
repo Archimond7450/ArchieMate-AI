@@ -67,6 +67,30 @@ object UserTokenRegistry {
       replyTo: ActorRef[HasResponse]
   ) extends Command
 
+  // Platform connection commands
+  final case class GetAllPlatformConnections(
+      userId: String,
+      platform: String,
+      replyTo: ActorRef[ConnectionResponse]
+  ) extends Command
+
+  final case class RegisterPlatformConnection(
+      userId: String,
+      platform: String,
+      channelId: String,
+      accessToken: String,
+      refreshToken: String,
+      expiresAt: Instant,
+      replyTo: ActorRef[ConnectionResponse]
+  ) extends Command
+
+  final case class RevokePlatformConnection(
+      userId: String,
+      platform: String,
+      channelId: String,
+      replyTo: ActorRef[ConnectionResponse]
+  ) extends Command
+
   // ----------------------------------------------------------------
   // Responses
   // ----------------------------------------------------------------
@@ -78,6 +102,7 @@ object UserTokenRegistry {
       with GetResponse
       with UpdateResponse
       with HasResponse
+      with ConnectionResponse
 
   sealed trait GetResponse
   final case class TokenFound(token: PlatformToken) extends GetResponse
@@ -91,6 +116,12 @@ object UserTokenRegistry {
 
   sealed trait HasResponse
   final case class HasAuth(has: Boolean) extends HasResponse
+
+  sealed trait ConnectionResponse
+  final case class AllPlatformConnectionsFound(connections: List[UserTokenActor.PlatformConnection]) extends ConnectionResponse
+  final case class ConnectionRegistered(platform: String, channelId: String) extends ConnectionResponse
+  final case class ConnectionRevoked(platform: String, channelId: String) extends ConnectionResponse
+  case object ConnectionNotFound extends ConnectionResponse
 
   // ----------------------------------------------------------------
   // Internal state
@@ -188,6 +219,36 @@ object UserTokenRegistry {
               forwardCommand(has, actorRef)
               Behaviors.same
           }
+
+        case getAll: GetAllPlatformConnections =>
+          getOrCreateUserActor(getAll.userId, state) match {
+            case Left(error) =>
+              getAll.replyTo ! Error(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardCommand(getAll, actorRef)
+              Behaviors.same
+          }
+
+        case register: RegisterPlatformConnection =>
+          getOrCreateUserActor(register.userId, state) match {
+            case Left(error) =>
+              register.replyTo ! Error(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardCommand(register, actorRef)
+              Behaviors.same
+          }
+
+        case revoke: RevokePlatformConnection =>
+          getOrCreateUserActor(revoke.userId, state) match {
+            case Left(error) =>
+              revoke.replyTo ! Error(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardCommand(revoke, actorRef)
+              Behaviors.same
+          }
       }
     )
 
@@ -196,12 +257,12 @@ object UserTokenRegistry {
   // ----------------------------------------------------------------
 
   /** Trait to build the ask payload for a given command type. */
-  private trait AskBuilder[Cmd] {
-    def buildAsk(cmd: Cmd, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command
+  private trait AskBuilder[Cmd, Resp] {
+    def buildAsk(cmd: Cmd, ref: ActorRef[Resp]): UserTokenActor.Command
   }
 
   private object AskBuilder {
-    given AskBuilder[RegisterTwitchAuthToken] with
+    given AskBuilder[RegisterTwitchAuthToken, UserTokenActor.AuthResponse] with
       def buildAsk(cmd: RegisterTwitchAuthToken, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
         UserTokenActor.RegisterTwitchAuthToken(
           cmd.accessToken,
@@ -211,15 +272,15 @@ object UserTokenRegistry {
           ref
         )
 
-    given AskBuilder[GetTwitchAuthToken] with
+    given AskBuilder[GetTwitchAuthToken, UserTokenActor.AuthResponse] with
       def buildAsk(cmd: GetTwitchAuthToken, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
         UserTokenActor.GetTwitchAuthToken(cmd.tokenId, ref)
 
-    given AskBuilder[GetAllTwitchAuthTokens] with
+    given AskBuilder[GetAllTwitchAuthTokens, UserTokenActor.AuthResponse] with
       def buildAsk(cmd: GetAllTwitchAuthTokens, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
         UserTokenActor.GetAllTwitchAuthTokens(ref)
 
-    given AskBuilder[UpdateTwitchAuthToken] with
+    given AskBuilder[UpdateTwitchAuthToken, UserTokenActor.AuthResponse] with
       def buildAsk(cmd: UpdateTwitchAuthToken, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
         UserTokenActor.UpdateTwitchAuthToken(
           cmd.tokenId,
@@ -229,49 +290,69 @@ object UserTokenRegistry {
           ref
         )
 
-    given AskBuilder[RevokeTwitchAuthToken] with
+    given AskBuilder[RevokeTwitchAuthToken, UserTokenActor.AuthResponse] with
       def buildAsk(cmd: RevokeTwitchAuthToken, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
         UserTokenActor.RevokeTwitchAuthToken(cmd.tokenId, ref)
 
-    given AskBuilder[HasTwitchAuth] with
+    given AskBuilder[HasTwitchAuth, UserTokenActor.AuthResponse] with
       def buildAsk(cmd: HasTwitchAuth, ref: ActorRef[UserTokenActor.AuthResponse]): UserTokenActor.Command =
         UserTokenActor.GetAllTwitchAuthTokens(ref)
+
+    given AskBuilder[GetAllPlatformConnections, UserTokenActor.ConnectionResponse] with
+      def buildAsk(cmd: GetAllPlatformConnections, ref: ActorRef[UserTokenActor.ConnectionResponse]): UserTokenActor.Command =
+        UserTokenActor.GetAllPlatformConnections(cmd.platform, ref)
+
+    given AskBuilder[RegisterPlatformConnection, UserTokenActor.ConnectionResponse] with
+      def buildAsk(cmd: RegisterPlatformConnection, ref: ActorRef[UserTokenActor.ConnectionResponse]): UserTokenActor.Command =
+        UserTokenActor.RegisterPlatformConnection(
+          cmd.platform,
+          cmd.channelId,
+          cmd.accessToken,
+          cmd.refreshToken,
+          cmd.expiresAt,
+          ref
+        )
+
+    given AskBuilder[RevokePlatformConnection, UserTokenActor.ConnectionResponse] with
+      def buildAsk(cmd: RevokePlatformConnection, ref: ActorRef[UserTokenActor.ConnectionResponse]): UserTokenActor.Command =
+        UserTokenActor.RevokePlatformConnection(cmd.platform, cmd.channelId, ref)
   }
 
   /** Forwards a command to a per-user [[UserTokenActor]] and handles the response.
    *
    *  @tparam Cmd the command type
+   *  @tparam Resp the response type
    *  @param cmd the command to forward
    *  @param actorRef the per-user actor to send the command to
    */
-  private def forwardCommand[Cmd](
+  private def forwardCommand[Cmd, Resp](
       cmd: Cmd,
       actorRef: ActorRef[UserTokenActor.Command]
   )(using
-      builder: AskBuilder[Cmd],
+      builder: AskBuilder[Cmd, Resp],
       scheduler: org.apache.pekko.actor.typed.Scheduler,
       timeout: Timeout,
       ec: ExecutionContext
   ): Unit = {
-    val future = actorRef ? { (ref: ActorRef[UserTokenActor.AuthResponse]) =>
+    val future = actorRef ? { (ref: ActorRef[Resp]) =>
       builder.buildAsk(cmd, ref)
     }
     future.onComplete {
-      case scala.util.Success(resp: UserTokenActor.AuthResponse) =>
+      case scala.util.Success(resp) =>
         resp match {
           case err: UserTokenActor.Error =>
             handleError(cmd, err)
           case other =>
-            handleSuccess(cmd, other)
+            handleSuccess(cmd, other.asInstanceOf[UserTokenActor.AuthResponse | UserTokenActor.ConnectionResponse])
         }
       case scala.util.Failure(ex) =>
         handleFailure(cmd, ex)
     }(ec)
   }
 
-  private def handleSuccess[Cmd](
+  private def handleSuccess[Cmd, Resp](
       cmd: Cmd,
-      resp: UserTokenActor.AuthResponse
+      resp: UserTokenActor.AuthResponse | UserTokenActor.ConnectionResponse
   ): Unit = cmd match {
     case register: RegisterTwitchAuthToken =>
       resp match {
@@ -317,6 +398,27 @@ object UserTokenRegistry {
         case _ =>
           has.replyTo ! HasAuth(false)
       }
+    case getAllConn: GetAllPlatformConnections =>
+      resp match {
+        case UserTokenActor.AllConnectionsFound(connections) =>
+          getAllConn.replyTo ! AllPlatformConnectionsFound(connections)
+        case other =>
+          getAllConn.replyTo ! Error(s"Unexpected response: $other")
+      }
+    case registerConn: RegisterPlatformConnection =>
+      resp match {
+        case UserTokenActor.ConnectionRegistered(platform, channelId) =>
+          registerConn.replyTo ! ConnectionRegistered(platform, channelId)
+        case other =>
+          registerConn.replyTo ! Error(s"Unexpected response: $other")
+      }
+    case revokeConn: RevokePlatformConnection =>
+      resp match {
+        case UserTokenActor.ConnectionRevoked(platform, channelId) =>
+          revokeConn.replyTo ! ConnectionRevoked(platform, channelId)
+        case other =>
+          revokeConn.replyTo ! Error(s"Unexpected response: $other")
+      }
   }
 
   private def handleError[Cmd](
@@ -335,6 +437,12 @@ object UserTokenRegistry {
       revoke.replyTo ! UpdateFailed(err.message)
     case _: HasTwitchAuth =>
       cmd.asInstanceOf[HasTwitchAuth].replyTo ! HasAuth(false)
+    case getAllConn: GetAllPlatformConnections =>
+      getAllConn.replyTo ! Error(err.message)
+    case registerConn: RegisterPlatformConnection =>
+      registerConn.replyTo ! Error(err.message)
+    case revokeConn: RevokePlatformConnection =>
+      revokeConn.replyTo ! Error(err.message)
   }
 
   private def handleFailure[Cmd](
@@ -353,6 +461,12 @@ object UserTokenRegistry {
       revoke.replyTo ! UpdateFailed(s"Command failed: ${ex.getMessage}")
     case _: HasTwitchAuth =>
       cmd.asInstanceOf[HasTwitchAuth].replyTo ! HasAuth(false)
+    case getAllConn: GetAllPlatformConnections =>
+      getAllConn.replyTo ! Error(s"Command failed: ${ex.getMessage}")
+    case registerConn: RegisterPlatformConnection =>
+      registerConn.replyTo ! Error(s"Command failed: ${ex.getMessage}")
+    case revokeConn: RevokePlatformConnection =>
+      revokeConn.replyTo ! Error(s"Command failed: ${ex.getMessage}")
   }
 
   private def getOrCreateUserActor(
