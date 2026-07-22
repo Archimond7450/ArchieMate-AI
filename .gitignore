@@ -20,6 +20,7 @@ frontend/scala-steward/
 .vscode/
 .bsp/
 .metals/
+.bloop/
 *.iml
 *.ipr
 *.iws
