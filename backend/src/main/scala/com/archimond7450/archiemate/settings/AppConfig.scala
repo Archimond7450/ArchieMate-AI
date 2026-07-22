@@ -29,6 +29,18 @@ case class TwitchConfig(
     scopes: List[String]
 )
 
+case class KickConfig(
+    clientId: String,
+    clientSecret: String,
+    callbackPath: String
+)
+
+case class YoutubeConfig(
+    clientId: String,
+    clientSecret: String,
+    callbackPath: String
+)
+
 case class HttpClientConfig(
     maxConnections: Int,
     maxIdleTimeoutMinutes: Int
@@ -39,6 +51,8 @@ case class AppConfig(
     database: DatabaseConfig,
     jwt: JwtConfig,
     twitch: TwitchConfig,
+    kick: KickConfig,
+    youtube: YoutubeConfig,
     httpClient: HttpClientConfig,
     callbackBaseUrl: String,
     adminUserId: String,
@@ -75,6 +89,22 @@ object AppConfig {
         callbackPath = resolveString(twitchConf, "callback-path", ""),
         scopes = resolveScopes(twitchConf)
       ),
+      kick = {
+        val kickConf = resolved.getConfig("archiemate.kick")
+        KickConfig(
+          clientId = resolveString(kickConf, "client-id", ""),
+          clientSecret = resolveString(kickConf, "client-secret", ""),
+          callbackPath = resolveString(kickConf, "callback-path", "")
+        )
+      },
+      youtube = {
+        val youtubeConf = resolved.getConfig("archiemate.youtube")
+        YoutubeConfig(
+          clientId = resolveString(youtubeConf, "client-id", ""),
+          clientSecret = resolveString(youtubeConf, "client-secret", ""),
+          callbackPath = resolveString(youtubeConf, "callback-path", "")
+        )
+      },
       httpClient = HttpClientConfig(
         maxConnections = resolveInt(resolved.getConfig("archiemate.http-client"), "max-connections", 10),
         maxIdleTimeoutMinutes = resolveInt(resolved.getConfig("archiemate.http-client"), "max-idle-timeout-minutes", 60)

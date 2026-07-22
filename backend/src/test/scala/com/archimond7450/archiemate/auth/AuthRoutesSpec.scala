@@ -1,6 +1,6 @@
 package com.archimond7450.archiemate.auth
 
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, ServerConfig, TwitchConfig}
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, YoutubeConfig}
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
@@ -39,6 +39,16 @@ class AuthRoutesSpec
       clientSecret = "test-client-secret",
       callbackPath = "/auth/twitch/callback",
       scopes = List.empty
+    ),
+    kick = KickConfig(
+      clientId = "",
+      clientSecret = "",
+      callbackPath = ""
+    ),
+    youtube = YoutubeConfig(
+      clientId = "",
+      clientSecret = "",
+      callbackPath = ""
     ),
     httpClient = HttpClientConfig(
       maxConnections = 10,

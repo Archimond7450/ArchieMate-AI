@@ -14,7 +14,9 @@ import com.archimond7450.archiemate.auth.TwitchOAuthActor
 import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.*
+import com.archimond7450.archiemate.kick.KickApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
+import com.archimond7450.archiemate.youtube.YoutubeApiActor
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -82,10 +84,18 @@ object ArchieMateApp {
         Behaviors.supervise(TwitchApiActor(appConfig.twitch, httpRequestActor, userTokenRegistry)).onFailure[Throwable](SupervisorStrategy.resume),
         "twitch-api-actor"
       )
+      val kickApiActor = innerCtx.spawn(
+        Behaviors.supervise(KickApiActor(appConfig.kick, httpRequestActor, userTokenRegistry)).onFailure[Throwable](SupervisorStrategy.resume),
+        "kick-api-actor"
+      )
+      val youtubeApiActor = innerCtx.spawn(
+        Behaviors.supervise(YoutubeApiActor(appConfig.youtube, httpRequestActor, userTokenRegistry)).onFailure[Throwable](SupervisorStrategy.resume),
+        "youtube-api-actor"
+      )
 
       Behaviors.receiveMessage {
         case StartHttp =>
-          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, userTokenRegistry, classicSystem.classicSystem)
+          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, kickApiActor, youtubeApiActor, userTokenRegistry, classicSystem.classicSystem)
           val authRoutes = new AuthRoutes(
             appConfig,
             twitchOAuthActor,

@@ -15,7 +15,9 @@ import com.archimond7450.archiemate.ReadinessTracker
 import com.archimond7450.archiemate.auth.AuthDirectives
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.settings.*
+import com.archimond7450.archiemate.kick.KickApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
+import com.archimond7450.archiemate.youtube.YoutubeApiActor
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import io.circe.Encoder
 import io.circe.generic.semiauto.deriveEncoder
@@ -56,6 +58,8 @@ class ApiRoutes(
     readinessTracker: ActorRef[ReadinessTracker.Command],
     jwtActor: ActorRef[JwtActor.Command],
     twitchApiActor: ActorRef[TwitchApiActor.Command],
+    kickApiActor: ActorRef[KickApiActor.Command],
+    youtubeApiActor: ActorRef[YoutubeApiActor.Command],
     userTokenRegistry: ActorRef[UserTokenRegistry.Command],
     classicActorSystem: ActorSystem
 ) {

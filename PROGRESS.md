@@ -63,6 +63,10 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] pekko-typed-actors-best-practices.md
 - [x] scala-best-practices.md
 
+| xxxxxxx | feat: add YoutubeApiActor — dedicated actor for YouTube API (token refresh, user info), YoutubeConfig, wire into ArchieMateApp |
+| xxxxxxx | feat: add KickApiActor — dedicated actor for Kick API (token refresh, user info), KickConfig, wire into ArchieMateApp |
+| xxxxxxx | feat: add Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens) |
+
 ## Recent Work (Last 10 Commits)
 
 | Commit | Description |
@@ -153,10 +157,10 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [ ] Cluster support (future)
 
 ### Phase 9: Platform Connection Management
-- [ ] Platform connection persistent actor (stores per-user platform connections)
-- [x] TwitchApiActor (token refresh + user info — see below)
-- [ ] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
-- [ ] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens)
+- [x] TwitchApiActor (token refresh + user info — wired into ArchieMateApp)
+- [x] Platform connection persistent actor (stores per-user platform connections — part of UserTokenActor)
+- [x] Kick platform actor (constructs requests, decodes JSON, auto-refreshes tokens — wired into ArchieMateApp)
+- [x] YouTube platform actor (constructs requests, decodes JSON, auto-refreshes tokens — wired into ArchieMateApp)
 - [ ] API endpoints for connection CRUD (`/api/v1/connections/...`)
 
 ### Phase 10: Chatbot Features
@@ -187,7 +191,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## Suggested Next Steps
 
-1. **Phase 9 - Platform Connections**: Wire TwitchApiActor into ArchieMateApp, add Kick/YouTube platform actors, and build dashboard UI for managing connections.
+1. **Phase 9 - Platform Connections**: Add Kick/YouTube platform actors (platform connection persistence is done in UserTokenActor), build API endpoints for connection CRUD, and build dashboard UI.
 2. **Phase 10 - Chatbot Features**: Implement the core chatbot command system.
 3. **Phase 12 - Production Hardening**: Health checks, metrics, rate limiting, CORS.
 

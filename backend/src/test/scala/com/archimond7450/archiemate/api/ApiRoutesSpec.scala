@@ -4,7 +4,9 @@ import com.archimond7450.archiemate.ReadinessTracker
 import com.archimond7450.archiemate.ReadinessTracker.ReadyResponse
 import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
 import com.archimond7450.archiemate.auth.JwtActor
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, ServerConfig, TwitchConfig}
+import com.archimond7450.archiemate.kick.KickApiActor
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, YoutubeConfig}
+import com.archimond7450.archiemate.youtube.YoutubeApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import org.apache.pekko.actor.ActorSystem
@@ -43,6 +45,16 @@ class ApiRoutesSpec
       callbackPath = "",
       scopes = List.empty
     ),
+    kick = KickConfig(
+      clientId = "",
+      clientSecret = "",
+      callbackPath = ""
+    ),
+    youtube = YoutubeConfig(
+      clientId = "",
+      clientSecret = "",
+      callbackPath = ""
+    ),
     httpClient = HttpClientConfig(
       maxConnections = 10,
       maxIdleTimeoutMinutes = 60
@@ -69,6 +81,14 @@ class ApiRoutesSpec
     TestProbe[TwitchApiActor.Command]("twitch-api-actor")
   private val twitchApiActor = twitchApiProbe.ref
 
+  private val kickApiProbe: TestProbe[KickApiActor.Command] =
+    TestProbe[KickApiActor.Command]("kick-api-actor")
+  private val kickApiActor = kickApiProbe.ref
+
+  private val youtubeApiProbe: TestProbe[YoutubeApiActor.Command] =
+    TestProbe[YoutubeApiActor.Command]("youtube-api-actor")
+  private val youtubeApiActor = youtubeApiProbe.ref
+
   private val userTokenRegistryProbe: TestProbe[UserTokenRegistry.Command] =
     TestProbe[UserTokenRegistry.Command]("user-token-registry")
   private val userTokenRegistry = userTokenRegistryProbe.ref
@@ -78,6 +98,8 @@ class ApiRoutesSpec
     readinessTracker,
     jwtActor,
     twitchApiActor,
+    kickApiActor,
+    youtubeApiActor,
     userTokenRegistry,
     classicSystem
   ).apiRoutes
