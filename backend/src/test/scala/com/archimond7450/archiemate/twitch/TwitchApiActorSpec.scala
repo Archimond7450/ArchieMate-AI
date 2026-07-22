@@ -52,7 +52,7 @@ class TwitchApiActorSpec
   private val twitchConfig: TwitchConfig = TwitchConfig(
     clientId = "test-client-id",
     clientSecret = "test-client-secret",
-    redirectUriPostfix = "/auth/twitch/callback",
+    callbackPath = "/auth/twitch/callback",
     scopes = List("chat:read", "chat:edit")
   )
 

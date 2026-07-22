@@ -91,7 +91,6 @@ object ArchieMateApp {
             twitchOAuthActor,
             userTokenRegistry,
             jwtActor,
-            appConfig.twitch.redirectUriPostfix,
             classicSystem.classicSystem
           )
           val combinedRoutes = authRoutes.authRoutes ~ apiRoutes.apiRoutes

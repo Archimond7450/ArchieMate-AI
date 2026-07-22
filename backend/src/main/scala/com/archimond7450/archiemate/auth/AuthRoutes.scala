@@ -21,19 +21,20 @@ class AuthRoutes(
     twitchOAuthActor: ActorRef[TwitchOAuthActor.Command],
     userTokenRegistry: ActorRef[UserTokenRegistry.Command],
     jwtActor: ActorRef[JwtActor.Command],
-    redirectUriPostfix: String,
     classicActorSystem: org.apache.pekko.actor.ActorSystem
 ) {
 
   private val JwtCookieName = "archiemate_jwt"
 
   private def buildRedirectUri(): String = {
-    appConfig.redirectUriPrefix + appConfig.twitch.redirectUriPostfix
+    appConfig.callbackBaseUrl + appConfig.twitch.callbackPath
   }
 
   private def isSecure: Boolean = {
-    appConfig.redirectUriPrefix.startsWith("https://")
+    appConfig.callbackBaseUrl.startsWith("https://")
   }
+
+  private val callbackPath: String = appConfig.twitch.callbackPath
 
   def authRoutes: Route = {
     pathPrefix("auth") {
@@ -107,24 +108,24 @@ class AuthRoutes(
                                     maxAge = Some(appConfig.jwt.tokenLifetimeMinutes.toLong * 60)
                                   )
                                   setCookie(cookie) {
-                                    redirect(redirectUriPostfix, StatusCodes.Found)
+                                    redirect(callbackPath, StatusCodes.Found)
                                   }
                                 case scala.util.Success(JwtActor.Error(msg)) =>
-                                  redirect(s"$redirectUriPostfix?error=jwt_failed", StatusCodes.Found)
+                                  redirect(s"$callbackPath?error=jwt_failed", StatusCodes.Found)
                                 case scala.util.Failure(ex) =>
-                                  redirect(s"$redirectUriPostfix?error=jwt_failed", StatusCodes.Found)
+                                  redirect(s"$callbackPath?error=jwt_failed", StatusCodes.Found)
                               }
                             }
                           case scala.util.Success(UserTokenRegistry.Error(msg)) =>
-                            redirect(s"$redirectUriPostfix?error=token_store_failed", StatusCodes.Found)
+                            redirect(s"$callbackPath?error=token_store_failed", StatusCodes.Found)
                           case scala.util.Failure(ex) =>
-                            redirect(s"$redirectUriPostfix?error=token_store_failed", StatusCodes.Found)
+                            redirect(s"$callbackPath?error=token_store_failed", StatusCodes.Found)
                         }
                       }
                     case scala.util.Success(TwitchOAuthActor.TokenExchangeError(msg)) =>
-                      redirect(s"$redirectUriPostfix?error=token_exchange_failed", StatusCodes.Found)
+                      redirect(s"$callbackPath?error=token_exchange_failed", StatusCodes.Found)
                     case scala.util.Failure(ex) =>
-                      redirect(s"$redirectUriPostfix?error=token_exchange_failed", StatusCodes.Found)
+                      redirect(s"$callbackPath?error=token_exchange_failed", StatusCodes.Found)
                   }
                 case _ =>
                   complete(StatusCodes.BadRequest -> "Missing code or state parameter")

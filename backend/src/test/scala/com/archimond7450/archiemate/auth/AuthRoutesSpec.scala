@@ -37,14 +37,14 @@ class AuthRoutesSpec
     twitch = TwitchConfig(
       clientId = "test-client-id",
       clientSecret = "test-client-secret",
-      redirectUriPostfix = "/auth/twitch/callback",
+      callbackPath = "/auth/twitch/callback",
       scopes = List.empty
     ),
     httpClient = HttpClientConfig(
       maxConnections = 10,
       maxIdleTimeoutMinutes = 60
     ),
-    redirectUriPrefix = "http://localhost",
+    callbackBaseUrl = "http://localhost",
     adminUserId = "",
     askTimeout = 5.seconds
   )
@@ -71,7 +71,6 @@ class AuthRoutesSpec
     twitchOAuthActor,
     userTokenRegistry,
     jwtActor,
-    "/auth/twitch/callback",
     classicSystem
   ).authRoutes
 

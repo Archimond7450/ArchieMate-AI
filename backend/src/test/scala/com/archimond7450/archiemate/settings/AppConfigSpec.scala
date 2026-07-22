@@ -17,7 +17,7 @@ class AppConfigSpec extends AnyWordSpecLike with Matchers {
       appConfig.database.driver shouldEqual "org.postgresql.Driver"
       appConfig.twitch.clientId shouldEqual ""
       appConfig.twitch.clientSecret shouldEqual ""
-      appConfig.twitch.redirectUriPostfix shouldEqual ""
+      appConfig.twitch.callbackPath shouldEqual ""
     }
 
     "respect environment variable overrides" in {

@@ -40,14 +40,14 @@ class ApiRoutesSpec
     twitch = TwitchConfig(
       clientId = "",
       clientSecret = "",
-      redirectUriPostfix = "",
+      callbackPath = "",
       scopes = List.empty
     ),
     httpClient = HttpClientConfig(
       maxConnections = 10,
       maxIdleTimeoutMinutes = 60
     ),
-    redirectUriPrefix = "http://localhost",
+    callbackBaseUrl = "http://localhost",
     adminUserId = "",
     askTimeout = 5.seconds
   )
