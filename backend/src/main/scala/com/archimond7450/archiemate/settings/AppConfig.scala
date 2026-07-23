@@ -29,6 +29,17 @@ case class TwitchConfig(
     scopes: List[String]
 )
 
+case class TwitchIrcConfig(
+    scheme: String,
+    server: String,
+    port: Int,
+    ircToken: String
+)
+
+object TwitchIrcConfig {
+  def apply(): TwitchIrcConfig = TwitchIrcConfig("wss", "irc-ws.chat.twitch.tv", 443, "")
+}
+
 case class KickConfig(
     clientId: String,
     clientSecret: String,
@@ -60,6 +71,7 @@ case class AppConfig(
     database: DatabaseConfig,
     jwt: JwtConfig,
     twitch: TwitchConfig,
+    twitchIrc: TwitchIrcConfig,
     kick: KickConfig,
     youtube: YoutubeConfig,
     websocket: WebSocketConfig,
@@ -98,6 +110,12 @@ object AppConfig {
         clientSecret = resolveString(twitchConf, "client-secret", ""),
         callbackPath = resolveString(twitchConf, "callback-path", ""),
         scopes = resolveScopes(twitchConf)
+      ),
+      twitchIrc = TwitchIrcConfig(
+        scheme = resolveString(twitchConf, "irc-scheme", "wss"),
+        server = resolveString(twitchConf, "irc-server", "irc-ws.chat.twitch.tv"),
+        port = resolveInt(twitchConf, "irc-port", 443),
+        ircToken = resolveString(twitchConf, "irc-token", "")
       ),
       kick = {
         val kickConf = resolved.getConfig("archiemate.kick")
