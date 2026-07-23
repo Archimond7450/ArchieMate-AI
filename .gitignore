@@ -65,4 +65,5 @@ docker-compose.override.yml
 # Pi coding agent
 pi/
 pi.sh
+reset_pi.sh
 skills-lock.json
