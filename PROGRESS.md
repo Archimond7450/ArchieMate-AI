@@ -63,10 +63,12 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] pekko-typed-actors-best-practices.md
 - [x] scala-best-practices.md
 
-## Recent Work (Last 10 Commits)
+## Recent Work (Last 15 Commits)
 
 | Commit | Description |
 |--------|-------------|
+| 9caac37 | feat: add TwitchChatActor for IRC WebSocket connection management |
+| 4060702 | feat: add WebSocketClient actor for Twitch chat interaction |
 | a1b2c3d | test: fix ConnectionRoutesSpec — unskip 10 pending tests for connection CRUD API |
 | d4e5f6g | test: add UserTokenRegistrySpec with pending tests — blocked by missing in-memory persistence plugin |
 | 8f9cb6d | feat: add ConnectionRoutes — CRUD API for platform connections (GET/POST/DELETE /api/v1/connections) |
@@ -77,6 +79,78 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 | b3f7e7d | refactor: move redirectUriPrefix from TwitchConfig to AppConfig |
 | e46ce56 | feat: add configurable Twitch redirect URI prefix with secure cookie logic |
 | c65cbee | feat: add administrator page with configurable admin user ID |
+
+### Phase 14: Chat Infrastructure ✅ COMPLETE
+- [x] WebSocketClient actor — generic bidirectional text/binary WebSocket client
+  - Automatic reconnection with configurable delay and max attempts
+  - Connection lifecycle events: Connected, IncomingText, IncomingBinary, Disconnected, Failed
+  - Supervision with restart-on-failure strategy
+  - 5 tests covering connection, messaging, disconnection, and failure handling
+- [x] TwitchChatActor — per-user Twitch IRC WebSocket connection manager
+  - Sends IRC login sequence (PASS, NICK, CAP REQ) on connect
+  - Auto-PONGs on PING from server to maintain connection
+  - Commands: SendChatMessage, SendReply, JoinChannel, LeaveChannel
+  - Events: LoginSuccess, LoginFailed, Disconnected, Failed
+  - IRC server/port/token configurable via TWITCH_IRC_* environment variables
+- [x] TwitchIrcConfig added to AppConfig with scheme, server, port, ircToken
+- [x] All 108 backend tests pass, zero compiler warnings
+
+### Phase 15: Twitch EventSub WebHooks (NEXT)
+
+**Why WebHooks over WebSockets?**
+- Twitch retries failed webhook deliveries (up to 5 times with exponential backoff)
+- If the chatbot is down when an event fires, Twitch stores and retries it
+- WebSockets drop events during disconnection with no retry
+- WebHooks work better with the existing Pekko HTTP server architecture
+
+**Implementation plan:**
+
+1. **TwitchEventSubConfig** (settings)
+   - `webhook-secret` (env: `EVENTSUB_WEBHOOK_SECRET`) — HMAC-SHA256 key
+   - `webhook-callback-path` (env: `EVENTSUB_CALLBACK_PATH`) — e.g. `/api/v1/eventsub/webhook`
+   - `webhook-lease-duration` — subscription lifetime (default 604800s = 1 week)
+
+2. **TwitchEventSubActor** (actor)
+   - Manages per-user EventSub subscriptions
+   - Creates subscriptions via Twitch Helix API (`/eventsub/subscriptions`)
+   - List/delete subscriptions via Helix API
+   - Handles subscription revocation on user disconnect
+   - Stores subscription metadata per user (session ID, status, etc.)
+
+3. **EventSubWebhookRoutes** (HTTP routes)
+   - `POST /api/v1/eventsub/webhook` — Twitch event receiver endpoint
+   - Challenge verification: respond to Twitch's `4c65f931-...` challenge with `hub.challenge`
+   - HMAC-SHA256 signature verification using `Twitch-Webhook-Signature` header
+   - Event routing to appropriate actors based on event type
+
+4. **Event types to support (initial)**
+   - `channel.chat.message` — incoming chat messages (for command processing)
+   - `channel.chat.notification` — chat events (subs, subs gifts, raids, etc.)
+   - `channel.points.custom_reward.redemption.added` — channel point redemptions
+   - `channel.follow` — follower events
+
+5. **Event processing**
+   - Parse and validate each event type (circe decoders)
+   - Route to chat message actor, moderation actor, command processing actor
+   - Dead-letter queue for unparseable events
+   - Per-user event dispatch (via UserTokenRegistry → TwitchChatActor)
+
+6. **Subscription lifecycle**
+   - On Twitch connection success → create EventSub subscriptions for that user
+   - On Twitch connection loss → revoke subscriptions
+   - Periodic subscription renewal before lease expires
+   - Subscription status monitoring
+
+7. **Testing**
+   - Challenge verification test (mock Twitch challenge request)
+   - HMAC signature verification tests
+   - Event parsing tests for each event type
+   - Subscription CRUD tests (mock Helix API responses)
+   - Webhook endpoint tests with Pekko HTTP testkit
+
+## Suggested Next Steps
+
+1. **Phase 15 - Twitch EventSub WebHooks** (next session): Implement EventSub WebHooks support for reliable event delivery with Twitch retry semantics.
 
 ### Phase 10: Testing Infrastructure ✅ COMPLETE
 - [x] ConnectionRoutesSpec — 10 tests covering all connection CRUD endpoints (GET/POST/DELETE)
@@ -181,9 +255,10 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## Suggested Next Steps
 
-1. **Phase 10 - Chatbot Features**: Implement the core chatbot command system (command parsing, message filtering, custom responses).
-2. **Phase 11 - Frontend Pages**: Build Settings page and Chat viewer component.
-3. **Phase 12 - Production Hardening**: Health checks, metrics, rate limiting, CORS.
+1. **Phase 15 - Twitch EventSub WebHooks** (next session): Implement EventSub WebHooks for reliable Twitch event delivery.
+2. **Phase 10 - Chatbot Features**: Implement the core chatbot command system (command parsing, message filtering, custom responses).
+3. **Phase 11 - Frontend Pages**: Build Settings page and Chat viewer component.
+4. **Phase 12 - Production Hardening**: Health checks, metrics, rate limiting, CORS.
 
 ## Notes
 
