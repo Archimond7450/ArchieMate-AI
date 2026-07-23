@@ -5,7 +5,7 @@ import com.archimond7450.archiemate.ReadinessTracker.ReadyResponse
 import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.kick.KickApiActor
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, YoutubeConfig}
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, WebSocketConfig, YoutubeConfig}
 import com.archimond7450.archiemate.youtube.YoutubeApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
 import com.archimond7450.archiemate.user.UserTokenRegistry
@@ -54,6 +54,10 @@ class ApiRoutesSpec
       clientId = "",
       clientSecret = "",
       callbackPath = ""
+    ),
+    websocket = WebSocketConfig(
+      reconnectDelay = 1.second,
+      maxReconnectAttempts = 5
     ),
     httpClient = HttpClientConfig(
       maxConnections = 10,

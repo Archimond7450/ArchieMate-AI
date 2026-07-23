@@ -41,6 +41,15 @@ case class YoutubeConfig(
     callbackPath: String
 )
 
+case class WebSocketConfig(
+    reconnectDelay: FiniteDuration,
+    maxReconnectAttempts: Int
+)
+
+object WebSocketConfig {
+  def apply(): WebSocketConfig = WebSocketConfig(1.second, 5)
+}
+
 case class HttpClientConfig(
     maxConnections: Int,
     maxIdleTimeoutMinutes: Int
@@ -53,6 +62,7 @@ case class AppConfig(
     twitch: TwitchConfig,
     kick: KickConfig,
     youtube: YoutubeConfig,
+    websocket: WebSocketConfig,
     httpClient: HttpClientConfig,
     callbackBaseUrl: String,
     adminUserId: String,
@@ -105,6 +115,10 @@ object AppConfig {
           callbackPath = resolveString(youtubeConf, "callback-path", "")
         )
       },
+      websocket = WebSocketConfig(
+        reconnectDelay = resolveDuration(resolved.getConfig("archiemate.websocket"), "reconnect-delay", 1.second),
+        maxReconnectAttempts = resolveInt(resolved.getConfig("archiemate.websocket"), "max-reconnect-attempts", 5)
+      ),
       httpClient = HttpClientConfig(
         maxConnections = resolveInt(resolved.getConfig("archiemate.http-client"), "max-connections", 10),
         maxIdleTimeoutMinutes = resolveInt(resolved.getConfig("archiemate.http-client"), "max-idle-timeout-minutes", 60)

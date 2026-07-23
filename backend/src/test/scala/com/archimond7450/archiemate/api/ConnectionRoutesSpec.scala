@@ -1,7 +1,7 @@
 package com.archimond7450.archiemate.api
 
 import com.archimond7450.archiemate.auth.JwtActor
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, YoutubeConfig}
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, WebSocketConfig, YoutubeConfig}
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import com.archimond7450.archiemate.user.UserTokenRegistry.{*, given}
 import com.archimond7450.archiemate.user.UserTokenActor
@@ -53,6 +53,10 @@ class ConnectionRoutesSpec
       clientId = "",
       clientSecret = "",
       callbackPath = ""
+    ),
+    websocket = WebSocketConfig(
+      reconnectDelay = 1.second,
+      maxReconnectAttempts = 5
     ),
     httpClient = HttpClientConfig(
       maxConnections = 10,

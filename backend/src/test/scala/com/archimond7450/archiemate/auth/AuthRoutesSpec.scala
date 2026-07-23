@@ -1,6 +1,6 @@
 package com.archimond7450.archiemate.auth
 
-import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, YoutubeConfig}
+import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, WebSocketConfig, YoutubeConfig}
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
@@ -49,6 +49,10 @@ class AuthRoutesSpec
       clientId = "",
       clientSecret = "",
       callbackPath = ""
+    ),
+    websocket = WebSocketConfig(
+      reconnectDelay = 1.second,
+      maxReconnectAttempts = 5
     ),
     httpClient = HttpClientConfig(
       maxConnections = 10,
