@@ -102,6 +102,12 @@ class ConnectionRoutes(
     ) {
       case scala.util.Success(UserTokenRegistry.AllPlatformConnectionsFound(connections)) =>
         complete(StatusCodes.OK -> encodeConnections(connections))
+      case scala.util.Success(UserTokenRegistry.ConnectionRegistered(platform, channelId)) =>
+        complete(StatusCodes.InternalServerError -> s"Unexpected connection registered: $platform/$channelId")
+      case scala.util.Success(UserTokenRegistry.ConnectionRevoked(platform, channelId)) =>
+        complete(StatusCodes.InternalServerError -> s"Unexpected connection revoked: $platform/$channelId")
+      case scala.util.Success(UserTokenRegistry.ConnectionNotFound) =>
+        complete(StatusCodes.NotFound -> "No connections found")
       case scala.util.Success(UserTokenRegistry.Error(msg)) =>
         complete(StatusCodes.InternalServerError -> msg)
       case scala.util.Failure(ex) =>
@@ -164,6 +170,12 @@ class ConnectionRoutes(
     ) {
       case scala.util.Success(UserTokenRegistry.AllPlatformConnectionsFound(connections)) =>
         complete(StatusCodes.OK -> encodeConnections(connections))
+      case scala.util.Success(UserTokenRegistry.ConnectionRegistered(p, cid)) =>
+        complete(StatusCodes.InternalServerError -> s"Unexpected connection registered: $p/$cid")
+      case scala.util.Success(UserTokenRegistry.ConnectionRevoked(p, cid)) =>
+        complete(StatusCodes.InternalServerError -> s"Unexpected connection revoked: $p/$cid")
+      case scala.util.Success(UserTokenRegistry.ConnectionNotFound) =>
+        complete(StatusCodes.NotFound -> "No connections found")
       case scala.util.Success(UserTokenRegistry.Error(msg)) =>
         complete(StatusCodes.InternalServerError -> msg)
       case scala.util.Failure(ex) =>

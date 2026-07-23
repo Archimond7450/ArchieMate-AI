@@ -46,7 +46,7 @@ abstract class GenericSerializer[Event <: AnyRef](
 
   override def fromBinary(
       bytes: Array[Byte],
-      manifest: Option[Class[_]]
+      manifest: Option[Class[?]]
   ): AnyRef = {
     val string = new String(bytes, StandardCharsets.UTF_8)
     deserializeEvent(string)

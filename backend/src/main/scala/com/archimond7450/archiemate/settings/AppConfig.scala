@@ -1,5 +1,6 @@
 package com.archimond7450.archiemate.settings
 
+import com.archimond7450.archiemate.twitch.eventsub.EventSubConfig
 import com.typesafe.config.{Config, ConfigResolveOptions}
 import scala.jdk.CollectionConverters._
 import scala.concurrent.duration.*
@@ -72,6 +73,7 @@ case class AppConfig(
     jwt: JwtConfig,
     twitch: TwitchConfig,
     twitchIrc: TwitchIrcConfig,
+    eventSub: EventSubConfig,
     kick: KickConfig,
     youtube: YoutubeConfig,
     websocket: WebSocketConfig,
@@ -117,6 +119,15 @@ object AppConfig {
         port = resolveInt(twitchConf, "irc-port", 443),
         ircToken = resolveString(twitchConf, "irc-token", "")
       ),
+      eventSub = {
+        val eventSubConf = resolved.getConfig("archiemate.eventsub")
+        EventSubConfig(
+          webhookSecret = resolveString(eventSubConf, "webhook-secret", ""),
+          callbackPath = resolveString(eventSubConf, "callback-path", "/api/v1/eventsub/webhook"),
+          leaseDuration = resolveDuration(eventSubConf, "lease-duration", EventSubConfig.DefaultLeaseDuration),
+          helixBaseUrl = resolveString(eventSubConf, "helix-base-url", EventSubConfig.DefaultHelixBaseUrl)
+        )
+      },
       kick = {
         val kickConf = resolved.getConfig("archiemate.kick")
         KickConfig(
@@ -167,7 +178,7 @@ object AppConfig {
     val envKey = key.toUpperCase.replace("-", "_")
     sys.env.get(envKey).filter(_.nonEmpty).map(_.split(",").map(_.trim).toList).getOrElse {
       if (conf.hasPathOrNull(key)) {
-        if (conf.hasPathOrNull(key) && conf.getValue(key).unwrapped().isInstanceOf[java.util.List[_]]) {
+        if (conf.hasPathOrNull(key) && conf.getValue(key).unwrapped().isInstanceOf[java.util.List[?]]) {
           conf.getStringList(key).asScala.toList
         } else {
           val value = conf.getString(key)

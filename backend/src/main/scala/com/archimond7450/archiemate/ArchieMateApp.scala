@@ -6,6 +6,7 @@ import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
 import org.apache.pekko.actor.typed.ActorSystem as TypedActorSystem
 import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.util.Timeout
 import org.apache.pekko.http.scaladsl.server.Directives._enhanceRouteWithConcatenation
 import com.archimond7450.archiemate.api.ApiRoutes
 import com.archimond7450.archiemate.auth.AuthRoutes
@@ -16,6 +17,7 @@ import com.archimond7450.archiemate.http.HttpClientActor
 import com.archimond7450.archiemate.settings.*
 import com.archimond7450.archiemate.kick.KickApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
+import com.archimond7450.archiemate.twitch.eventsub.EventSubActor
 import com.archimond7450.archiemate.youtube.YoutubeApiActor
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import com.typesafe.config.{Config, ConfigFactory}
@@ -92,10 +94,21 @@ object ArchieMateApp {
         Behaviors.supervise(YoutubeApiActor(appConfig.youtube, httpRequestActor, userTokenRegistry)).onFailure[Throwable](SupervisorStrategy.resume),
         "youtube-api-actor"
       )
+      val eventSubActor = innerCtx.spawn[EventSubActor.Command](
+        Behaviors.supervise(
+          EventSubActor(
+            appConfig.eventSub,
+            appConfig.twitch,
+            httpRequestActor,
+            userTokenRegistry
+          )(using classicSystem, Timeout(appConfig.askTimeout))
+        ).onFailure[Throwable](SupervisorStrategy.resume),
+        "eventsub-actor"
+      )
 
       Behaviors.receiveMessage {
         case StartHttp =>
-          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, kickApiActor, youtubeApiActor, userTokenRegistry, classicSystem.classicSystem)
+          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, kickApiActor, youtubeApiActor, eventSubActor, userTokenRegistry, classicSystem.classicSystem)
           val authRoutes = new AuthRoutes(
             appConfig,
             twitchOAuthActor,

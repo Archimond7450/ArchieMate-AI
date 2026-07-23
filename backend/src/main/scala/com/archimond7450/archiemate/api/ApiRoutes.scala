@@ -17,6 +17,7 @@ import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.settings.*
 import com.archimond7450.archiemate.kick.KickApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
+import com.archimond7450.archiemate.twitch.eventsub.EventSubWebhookRoutes
 import com.archimond7450.archiemate.youtube.YoutubeApiActor
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import io.circe.Encoder
@@ -39,7 +40,7 @@ object AuthResponse {
       if (a.isAdmin) {
         fields = "is_admin" -> io.circe.Json.True :: fields
       }
-      io.circe.Json.obj(fields: _*)
+      io.circe.Json.obj(fields*)
     }
   }
 }
@@ -60,6 +61,7 @@ class ApiRoutes(
     twitchApiActor: ActorRef[TwitchApiActor.Command],
     kickApiActor: ActorRef[KickApiActor.Command],
     youtubeApiActor: ActorRef[YoutubeApiActor.Command],
+    eventSubActor: ActorRef[com.archimond7450.archiemate.twitch.eventsub.EventSubActor.Command],
     userTokenRegistry: ActorRef[UserTokenRegistry.Command],
     classicActorSystem: ActorSystem
 ) {
@@ -73,6 +75,12 @@ class ApiRoutes(
     scala.concurrent.ExecutionContext.global,
     classicActorSystem
   ).connectionRoutes
+
+  private val eventSubRoutes = new EventSubWebhookRoutes(
+    config.eventSub,
+    scala.concurrent.ExecutionContext.global,
+    classicActorSystem
+  ).webhookRoutes
 
   private val apiVersion = config.server.apiVersion
 
@@ -166,7 +174,7 @@ class ApiRoutes(
                           UserTokenRegistry.GetAllTwitchAuthTokens(userId, ref)
                         )
                       ) {
-                        case Success(UserTokenRegistry.AllTokensFound(tokens)) if tokens.nonEmpty =>
+                        case Success(UserTokenRegistry.AllTokensFound(tokens)) =>
                           val token = tokens.head
                           onComplete(
                             twitchApiActor.ask[TwitchApiActor.TokenResponse](ref =>
@@ -175,6 +183,10 @@ class ApiRoutes(
                           ) {
                             case Success(TwitchApiActor.UserFound(_, _, displayName)) =>
                               complete(StatusCodes.OK -> TwitchProfileResponse(displayName, "").asJson.noSpaces)
+                            case Success(TwitchApiActor.TokenRefreshed(_, _, _)) =>
+                              complete(StatusCodes.InternalServerError -> "Unexpected token refresh response")
+                            case Success(TwitchApiActor.UserListFound(_)) =>
+                              complete(StatusCodes.InternalServerError -> "Unexpected user list response")
                             case Success(TwitchApiActor.Error(msg)) =>
                               complete(StatusCodes.InternalServerError -> msg)
                             case Failure(ex) =>
@@ -182,6 +194,10 @@ class ApiRoutes(
                           }
                         case Success(UserTokenRegistry.AllTokensFoundEmpty) =>
                           complete(StatusCodes.NotFound -> "No Twitch auth found")
+                        case Success(UserTokenRegistry.TokenNotFound) =>
+                          complete(StatusCodes.NotFound -> "No Twitch token found")
+                        case Success(UserTokenRegistry.TokenFound(_)) =>
+                          complete(StatusCodes.InternalServerError -> "Unexpected single token response")
                         case Success(UserTokenRegistry.Error(msg)) =>
                           complete(StatusCodes.InternalServerError -> msg)
                         case Failure(ex) =>
@@ -206,6 +222,8 @@ class ApiRoutes(
     } ~
     // Connection routes
     connectionRoutes ~
+    // EventSub webhook routes
+    eventSubRoutes ~
     // Serve static frontend files
     pathEndOrSingleSlash {
       getFromResource("public/index.html")

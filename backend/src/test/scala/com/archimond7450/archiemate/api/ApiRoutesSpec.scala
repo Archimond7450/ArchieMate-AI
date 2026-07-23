@@ -6,6 +6,7 @@ import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.kick.KickApiActor
 import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, TwitchIrcConfig, WebSocketConfig, YoutubeConfig}
+import com.archimond7450.archiemate.twitch.eventsub.EventSubConfig
 import com.archimond7450.archiemate.youtube.YoutubeApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
 import com.archimond7450.archiemate.user.UserTokenRegistry
@@ -61,6 +62,12 @@ class ApiRoutesSpec
       port = 443,
       ircToken = ""
     ),
+    eventSub = EventSubConfig(
+      webhookSecret = "test-secret",
+      callbackPath = "/api/v1/eventsub/webhook",
+      leaseDuration = 604800.seconds,
+      helixBaseUrl = "https://api.twitch.tv/helix"
+    ),
     websocket = WebSocketConfig(
       reconnectDelay = 1.second,
       maxReconnectAttempts = 5
@@ -103,6 +110,10 @@ class ApiRoutesSpec
     TestProbe[UserTokenRegistry.Command]("user-token-registry")
   private val userTokenRegistry = userTokenRegistryProbe.ref
 
+  private val eventSubActorProbe: TestProbe[com.archimond7450.archiemate.twitch.eventsub.EventSubActor.Command] =
+    TestProbe[com.archimond7450.archiemate.twitch.eventsub.EventSubActor.Command]("eventsub-actor")
+  private val eventSubActor = eventSubActorProbe.ref
+
   private val apiRoutes = new ApiRoutes(
     testConfig,
     readinessTracker,
@@ -110,6 +121,7 @@ class ApiRoutesSpec
     twitchApiActor,
     kickApiActor,
     youtubeApiActor,
+    eventSubActor,
     userTokenRegistry,
     classicSystem
   ).apiRoutes

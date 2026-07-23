@@ -9,12 +9,9 @@ import org.apache.pekko.util.Timeout
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.util.{Failure, Success}
-
 object AuthDirectives {
 
+  @scala.annotation.nowarn
   def authenticateToken(
       token: String,
       jwtActor: ActorRef[JwtActor.Command]
@@ -23,12 +20,9 @@ object AuthDirectives {
       JwtActor.DecodeAndValidate(token, ref)
     )
     f.map {
-      case DecodeAndValidateSuccess(userId, _) =>
-        Right(userId)
-      case JwtActor.Error(message) =>
-        Left(new RuntimeException(message))
-      case other =>
-        Left(new RuntimeException(s"Unexpected response: $other"))
+      case DecodeAndValidateSuccess(userId, _) => Right(userId)
+    }.recover {
+      case ex => Left(new RuntimeException(s"Token authentication failed: ${ex.getMessage}"))
     }
   }
 }

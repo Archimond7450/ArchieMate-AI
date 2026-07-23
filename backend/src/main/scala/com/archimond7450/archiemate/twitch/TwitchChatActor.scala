@@ -6,6 +6,7 @@ import com.archimond7450.archiemate.actors.websocket.WebSocketClient.{
   Disconnected => WsDisconnected,
   Event => WsEvent,
   Failed => WsFailed,
+  IncomingBinary,
   IncomingText
 }
 import com.archimond7450.archiemate.settings.TwitchIrcConfig
@@ -122,6 +123,7 @@ object TwitchChatActor {
             case WsConnected(_)     => InternalConnected
             case WsDisconnected     => parent ! Disconnected; InternalDisconnected
             case WsFailed(ex)       => parent ! Failed(ex); InternalFailed(ex)
+            case IncomingBinary(_)  => null // IRC is text-only
           }
         }
 
@@ -186,9 +188,6 @@ class TwitchChatActor private (
         ctx.log.error("WebSocket failed: {}", ex.getMessage)
         parent ! Failed(ex)
         mainBehavior(state)
-      case other =>
-        ctx.log.warn("Ignoring command: {}", other)
-        Behaviors.same
     }
 
   // ----------------------------------------------------------------

@@ -1,6 +1,7 @@
 package com.archimond7450.archiemate.auth
 
 import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, TwitchIrcConfig, WebSocketConfig, YoutubeConfig}
+import com.archimond7450.archiemate.twitch.eventsub.EventSubConfig
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
@@ -55,6 +56,12 @@ class AuthRoutesSpec
       server = "irc-ws.chat.twitch.tv",
       port = 443,
       ircToken = ""
+    ),
+    eventSub = EventSubConfig(
+      webhookSecret = "test-secret",
+      callbackPath = "/api/v1/eventsub/webhook",
+      leaseDuration = 604800.seconds,
+      helixBaseUrl = "https://api.twitch.tv/helix"
     ),
     websocket = WebSocketConfig(
       reconnectDelay = 1.second,

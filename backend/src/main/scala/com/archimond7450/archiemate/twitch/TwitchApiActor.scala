@@ -216,6 +216,10 @@ object TwitchApiActor {
         case getUserByLoginCmd: GetUserByLogin =>
           getUserByLogin(config, getUserByLoginCmd.loginName, getUserByLoginCmd.accessToken, getUserByLoginCmd.replyTo, httpRequestActor, helixBaseUrl)
           Behaviors.same
+        case HttpRequestReply(_) =>
+          // Response from Helix API handled via callback
+          Behaviors.same
+          Behaviors.same
       }
     )
 

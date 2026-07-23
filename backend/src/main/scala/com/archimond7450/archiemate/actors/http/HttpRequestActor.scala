@@ -87,6 +87,9 @@ class HttpRequestActor private (
     Behaviors.receiveMessage {
       case req: Request[_] =>
         handleRequest(req.asInstanceOf[Request[Any]])
+      case other =>
+        ctx.log.warn("Unexpected command in waiting state: {}", other.getClass.getSimpleName)
+        Behaviors.same
     }
 
   private def handleRequest[T](
@@ -137,8 +140,6 @@ class HttpRequestActor private (
         processPending(pending)
       case (_, req: Request[_]) =>
         active(decode, replyTo, pending :+ req.asInstanceOf[Request[Any]])
-      case (_, _) =>
-        Behaviors.same
     }
 
   private def processPending(
