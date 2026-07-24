@@ -86,6 +86,64 @@ private object PlatformConnectionRevoked {
   given Encoder[PlatformConnectionRevoked] = ConfiguredEncoder.derived(using CirceConfiguration.pekkoConfiguration)
 }
 
+// YouTube primary connection events
+final case class YoutubePrimaryConnectionRegistered(
+    channelId: String,
+    accessToken: String,
+    refreshToken: String,
+    expiresAt: Instant
+) extends UserTokenEvent
+private object YoutubePrimaryConnectionRegistered {
+  given Decoder[YoutubePrimaryConnectionRegistered] = ConfiguredDecoder.derived(using CirceConfiguration.pekkoConfiguration)
+  given Encoder[YoutubePrimaryConnectionRegistered] = ConfiguredEncoder.derived(using CirceConfiguration.pekkoConfiguration)
+}
+
+final case class YoutubePrimaryConnectionUpdated(
+    channelId: String,
+    accessToken: String,
+    refreshToken: String,
+    expiresAt: Instant
+) extends UserTokenEvent
+private object YoutubePrimaryConnectionUpdated {
+  given Decoder[YoutubePrimaryConnectionUpdated] = ConfiguredDecoder.derived(using CirceConfiguration.pekkoConfiguration)
+  given Encoder[YoutubePrimaryConnectionUpdated] = ConfiguredEncoder.derived(using CirceConfiguration.pekkoConfiguration)
+}
+
+final case class YoutubePrimaryConnectionRevoked(channelId: String) extends UserTokenEvent
+private object YoutubePrimaryConnectionRevoked {
+  given Decoder[YoutubePrimaryConnectionRevoked] = ConfiguredDecoder.derived(using CirceConfiguration.pekkoConfiguration)
+  given Encoder[YoutubePrimaryConnectionRevoked] = ConfiguredEncoder.derived(using CirceConfiguration.pekkoConfiguration)
+}
+
+// YouTube secondary connection events
+final case class YoutubeSecondaryConnectionRegistered(
+    channelId: String,
+    accessToken: String,
+    refreshToken: String,
+    expiresAt: Instant
+) extends UserTokenEvent
+private object YoutubeSecondaryConnectionRegistered {
+  given Decoder[YoutubeSecondaryConnectionRegistered] = ConfiguredDecoder.derived(using CirceConfiguration.pekkoConfiguration)
+  given Encoder[YoutubeSecondaryConnectionRegistered] = ConfiguredEncoder.derived(using CirceConfiguration.pekkoConfiguration)
+}
+
+final case class YoutubeSecondaryConnectionUpdated(
+    channelId: String,
+    accessToken: String,
+    refreshToken: String,
+    expiresAt: Instant
+) extends UserTokenEvent
+private object YoutubeSecondaryConnectionUpdated {
+  given Decoder[YoutubeSecondaryConnectionUpdated] = ConfiguredDecoder.derived(using CirceConfiguration.pekkoConfiguration)
+  given Encoder[YoutubeSecondaryConnectionUpdated] = ConfiguredEncoder.derived(using CirceConfiguration.pekkoConfiguration)
+}
+
+final case class YoutubeSecondaryConnectionRevoked(channelId: String) extends UserTokenEvent
+private object YoutubeSecondaryConnectionRevoked {
+  given Decoder[YoutubeSecondaryConnectionRevoked] = ConfiguredDecoder.derived(using CirceConfiguration.pekkoConfiguration)
+  given Encoder[YoutubeSecondaryConnectionRevoked] = ConfiguredEncoder.derived(using CirceConfiguration.pekkoConfiguration)
+}
+
 // ----------------------------------------------------------------
 // Serializer (top-level for Java reflection)
 // ----------------------------------------------------------------
@@ -177,6 +235,47 @@ object UserTokenActor {
       replyTo: ActorRef[ConnectionResponse]
   ) extends Command
 
+  // YouTube primary connection commands
+  final case class RegisterYoutubePrimaryConnection(
+      channelId: String,
+      accessToken: String,
+      refreshToken: String,
+      expiresAt: Instant,
+      replyTo: ActorRef[YoutubePrimaryResponse]
+  ) extends Command
+  final case class UpdateYoutubePrimaryConnection(
+      channelId: String,
+      accessToken: String,
+      refreshToken: String,
+      expiresAt: Instant,
+      replyTo: ActorRef[YoutubePrimaryResponse]
+  ) extends Command
+  final case class RevokeYoutubePrimaryConnection(
+      replyTo: ActorRef[YoutubePrimaryResponse]
+  ) extends Command
+  final case class GetYoutubePrimaryConnection(replyTo: ActorRef[YoutubePrimaryResponse]) extends Command
+
+  // YouTube secondary connection commands
+  final case class RegisterYoutubeSecondaryConnection(
+      channelId: String,
+      accessToken: String,
+      refreshToken: String,
+      expiresAt: Instant,
+      replyTo: ActorRef[YoutubeSecondaryResponse]
+  ) extends Command
+  final case class UpdateYoutubeSecondaryConnection(
+      channelId: String,
+      accessToken: String,
+      refreshToken: String,
+      expiresAt: Instant,
+      replyTo: ActorRef[YoutubeSecondaryResponse]
+  ) extends Command
+  final case class RevokeYoutubeSecondaryConnection(
+      channelId: String,
+      replyTo: ActorRef[YoutubeSecondaryResponse]
+  ) extends Command
+  final case class GetYoutubeSecondaryConnections(replyTo: ActorRef[YoutubeSecondaryResponse]) extends Command
+
   // ----------------------------------------------------------------
   // Per-command response traits
   // ----------------------------------------------------------------
@@ -199,7 +298,22 @@ object UserTokenActor {
   final case class AllConnectionsFound(connections: List[PlatformConnection]) extends ConnectionResponse
   final case class HasConnection(hasConnection: Boolean) extends ConnectionResponse
 
-  final case class Error(message: String) extends AuthResponse with ConnectionResponse
+  // YouTube primary responses
+  sealed trait YoutubePrimaryResponse
+  final case class YoutubePrimaryRegistered(channelId: String) extends YoutubePrimaryResponse
+  final case class YoutubePrimaryUpdated(channelId: String) extends YoutubePrimaryResponse
+  final case class YoutubePrimaryRevoked(channelId: String) extends YoutubePrimaryResponse
+  final case class YoutubePrimaryFound(connection: PlatformConnection) extends YoutubePrimaryResponse
+  case object YoutubePrimaryNotFound extends YoutubePrimaryResponse
+
+  // YouTube secondary responses
+  sealed trait YoutubeSecondaryResponse
+  final case class YoutubeSecondaryRegistered(channelId: String) extends YoutubeSecondaryResponse
+  final case class YoutubeSecondaryUpdated(channelId: String) extends YoutubeSecondaryResponse
+  final case class YoutubeSecondaryRevoked(channelId: String) extends YoutubeSecondaryResponse
+  final case class YoutubeSecondaryConnectionsFound(connections: List[PlatformConnection]) extends YoutubeSecondaryResponse
+
+  final case class Error(message: String) extends AuthResponse with ConnectionResponse with YoutubePrimaryResponse with YoutubeSecondaryResponse
 
   // ----------------------------------------------------------------
   // Shared data classes
@@ -228,7 +342,8 @@ object UserTokenActor {
 
   private[user] case class State(
       twitchTokens: Map[String, PlatformToken] = Map.empty,
-      connections: Map[String, List[PlatformConnection]] = Map.empty
+      connections: Map[String, List[PlatformConnection]] = Map.empty,
+      youtubePrimary: Option[PlatformConnection] = None
   )
 
   // ----------------------------------------------------------------
@@ -384,6 +499,138 @@ object UserTokenActor {
           Effect.none.thenReply(hasConn.replyTo) { s =>
             HasConnection(s.connections.getOrElse(hasConn.platform, Nil).exists(_.channelId == hasConn.channelId))
           }
+
+        // --- YouTube primary connection commands ---
+
+        case registerPrimary: RegisterYoutubePrimaryConnection =>
+          state.youtubePrimary match {
+            case Some(_) =>
+              Effect.none.thenReply(registerPrimary.replyTo) { _ =>
+                Error("A YouTube primary connection already exists")
+              }
+            case None =>
+              val conn = PlatformConnection(
+                "youtube",
+                registerPrimary.channelId,
+                registerPrimary.accessToken,
+                registerPrimary.refreshToken,
+                registerPrimary.expiresAt
+              )
+              Effect
+                .persist(YoutubePrimaryConnectionRegistered(
+                  registerPrimary.channelId,
+                  registerPrimary.accessToken,
+                  registerPrimary.refreshToken,
+                  registerPrimary.expiresAt
+                ))
+                .thenReply(registerPrimary.replyTo) { _ =>
+                  YoutubePrimaryRegistered(registerPrimary.channelId)
+                }
+          }
+
+        case updatePrimary: UpdateYoutubePrimaryConnection =>
+          state.youtubePrimary match {
+            case Some(_) =>
+              Effect
+                .persist(YoutubePrimaryConnectionUpdated(
+                  updatePrimary.channelId,
+                  updatePrimary.accessToken,
+                  updatePrimary.refreshToken,
+                  updatePrimary.expiresAt
+                ))
+                .thenReply(updatePrimary.replyTo) { _ =>
+                  YoutubePrimaryUpdated(updatePrimary.channelId)
+                }
+            case None =>
+              Effect.none.thenReply(updatePrimary.replyTo) { _ =>
+                Error("No YouTube primary connection to update")
+              }
+          }
+
+        case revokePrimary: RevokeYoutubePrimaryConnection =>
+          state.youtubePrimary match {
+            case Some(conn) =>
+              Effect
+                .persist(YoutubePrimaryConnectionRevoked(conn.channelId))
+                .thenReply(revokePrimary.replyTo) { _ =>
+                  YoutubePrimaryRevoked(conn.channelId)
+                }
+            case None =>
+              Effect.none.thenReply(revokePrimary.replyTo) { _ =>
+                Error("No YouTube primary connection to revoke")
+              }
+          }
+
+        case getPrimary: GetYoutubePrimaryConnection =>
+          state.youtubePrimary match {
+            case Some(conn) =>
+              Effect.none.thenReply(getPrimary.replyTo) { _ =>
+                YoutubePrimaryFound(conn)
+              }
+            case None =>
+              Effect.none.thenReply(getPrimary.replyTo) { _ =>
+                YoutubePrimaryNotFound
+              }
+          }
+
+        // --- YouTube secondary connection commands ---
+
+        case registerSecondary: RegisterYoutubeSecondaryConnection =>
+          val existing = state.connections.getOrElse("youtube", Nil)
+          if (existing.exists(_.channelId == registerSecondary.channelId)) {
+            Effect.none.thenReply(registerSecondary.replyTo) { _ =>
+              Error(s"YouTube connection for channel ${registerSecondary.channelId} already registered")
+            }
+          } else {
+            Effect
+              .persist(YoutubeSecondaryConnectionRegistered(
+                registerSecondary.channelId,
+                registerSecondary.accessToken,
+                registerSecondary.refreshToken,
+                registerSecondary.expiresAt
+              ))
+              .thenReply(registerSecondary.replyTo) { _ =>
+                YoutubeSecondaryRegistered(registerSecondary.channelId)
+              }
+          }
+
+        case updateSecondary: UpdateYoutubeSecondaryConnection =>
+          state.connections.get("youtube") match {
+            case Some(conns) if conns.exists(_.channelId == updateSecondary.channelId) =>
+              Effect
+                .persist(YoutubeSecondaryConnectionUpdated(
+                  updateSecondary.channelId,
+                  updateSecondary.accessToken,
+                  updateSecondary.refreshToken,
+                  updateSecondary.expiresAt
+                ))
+                .thenReply(updateSecondary.replyTo) { _ =>
+                  YoutubeSecondaryUpdated(updateSecondary.channelId)
+                }
+            case _ =>
+              Effect.none.thenReply(updateSecondary.replyTo) { _ =>
+                Error(s"YouTube connection for channel ${updateSecondary.channelId} not found")
+              }
+          }
+
+        case revokeSecondary: RevokeYoutubeSecondaryConnection =>
+          state.connections.get("youtube") match {
+            case Some(conns) if conns.exists(_.channelId == revokeSecondary.channelId) =>
+              Effect
+                .persist(YoutubeSecondaryConnectionRevoked(revokeSecondary.channelId))
+                .thenReply(revokeSecondary.replyTo) { _ =>
+                  YoutubeSecondaryRevoked(revokeSecondary.channelId)
+                }
+            case _ =>
+              Effect.none.thenReply(revokeSecondary.replyTo) { _ =>
+                Error(s"YouTube connection for channel ${revokeSecondary.channelId} not found")
+              }
+          }
+
+        case getSecondary: GetYoutubeSecondaryConnections =>
+          Effect.none.thenReply(getSecondary.replyTo) { s =>
+            YoutubeSecondaryConnectionsFound(s.connections.getOrElse("youtube", Nil))
+          }
       }
   }
 
@@ -437,6 +684,56 @@ object UserTokenActor {
           case None =>
             state
         }
+
+      // --- YouTube primary event handlers ---
+
+      case YoutubePrimaryConnectionRegistered(channelId, accessToken, refreshToken, expiresAt) =>
+        val conn = PlatformConnection("youtube", channelId, accessToken, refreshToken, expiresAt)
+        state.copy(youtubePrimary = Some(conn))
+
+      case YoutubePrimaryConnectionUpdated(channelId, accessToken, refreshToken, expiresAt) =>
+        state.youtubePrimary match {
+          case Some(conn) =>
+            state.copy(youtubePrimary = Some(conn.copy(accessToken = accessToken, refreshToken = refreshToken, expiresAt = expiresAt)))
+          case None =>
+            state
+        }
+
+      case YoutubePrimaryConnectionRevoked(_) =>
+        state.copy(youtubePrimary = None)
+
+      // --- YouTube secondary event handlers ---
+
+      case YoutubeSecondaryConnectionRegistered(channelId, accessToken, refreshToken, expiresAt) =>
+        val conn = PlatformConnection("youtube", channelId, accessToken, refreshToken, expiresAt)
+        val existing = state.connections.getOrElse("youtube", Nil)
+        state.copy(connections = state.connections + ("youtube" -> (existing :+ conn)))
+
+      case YoutubeSecondaryConnectionUpdated(channelId, accessToken, refreshToken, expiresAt) =>
+        state.connections.get("youtube") match {
+          case Some(conns) =>
+            val updated = conns.map {
+              case c if c.channelId == channelId =>
+                c.copy(accessToken = accessToken, refreshToken = refreshToken, expiresAt = expiresAt)
+            }
+            state.copy(connections = state.connections + ("youtube" -> updated))
+          case None =>
+            state
+        }
+
+      case YoutubeSecondaryConnectionRevoked(channelId) =>
+        state.connections.get("youtube") match {
+          case Some(conns) =>
+            val updated = conns.filterNot(_.channelId == channelId)
+            if (updated.isEmpty) {
+              state.copy(connections = state.connections - "youtube")
+            } else {
+              state.copy(connections = state.connections + ("youtube" -> updated))
+            }
+          case None =>
+            state
+        }
+
     }
   }
 

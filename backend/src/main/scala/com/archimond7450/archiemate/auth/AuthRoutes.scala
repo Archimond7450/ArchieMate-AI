@@ -9,7 +9,8 @@ import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.util.Timeout
-import com.archimond7450.archiemate.settings.{AppConfig, TwitchConfig, KickConfig}
+import com.archimond7450.archiemate.settings.{AppConfig, TwitchConfig, KickConfig, YoutubeConfig}
+import com.archimond7450.archiemate.auth.YoutubeOAuthActor
 
 import java.time.Instant
 import scala.concurrent.duration.*
@@ -20,6 +21,7 @@ class AuthRoutes(
     appConfig: AppConfig,
     twitchOAuthActor: ActorRef[TwitchOAuthActor.Command],
     kickOAuthActor: ActorRef[KickOAuthActor.Command],
+    youtubeOAuthActor: ActorRef[YoutubeOAuthActor.Command],
     userTokenRegistry: ActorRef[UserTokenRegistry.Command],
     jwtActor: ActorRef[JwtActor.Command],
     classicActorSystem: org.apache.pekko.actor.ActorSystem
@@ -279,6 +281,126 @@ class AuthRoutes(
                       redirect(s"${appConfig.kick.callbackPath}?error=token_exchange_failed", StatusCodes.Found)
                     case scala.util.Failure(ex) =>
                       redirect(s"${appConfig.kick.callbackPath}?error=token_exchange_failed", StatusCodes.Found)
+                  }
+                case _ =>
+                  complete(StatusCodes.BadRequest -> "Missing code or state parameter")
+              }
+            }
+          }
+        }
+      } ~
+      // YouTube authentication routes
+      pathPrefix("youtube") {
+        // GET /auth/youtube/login
+        path("login") {
+          get {
+            given Scheduler = classicActorSystem.toTyped.scheduler
+            given Timeout = Timeout(appConfig.askTimeout)
+            given ExecutionContext = scala.concurrent.ExecutionContext.global
+
+            val redirectUri = buildRedirectUri(appConfig.youtube.callbackPath)
+            onComplete(youtubeOAuthActor.ask[YoutubeOAuthActor.StateGenerated](ref =>
+              YoutubeOAuthActor.GenerateState(redirectUri, ref, scopes = appConfig.youtube.scopes)
+            )) {
+              case scala.util.Success(YoutubeOAuthActor.StateOk(_, authUrl)) =>
+                redirect(authUrl.toString, StatusCodes.Found)
+              case scala.util.Success(YoutubeOAuthActor.StateError(msg)) =>
+                complete(StatusCodes.InternalServerError -> s"Failed to generate OAuth state: $msg")
+              case scala.util.Failure(ex) =>
+                complete(StatusCodes.InternalServerError -> s"OAuth state generation failed: ${ex.getMessage}")
+            }
+          }
+        } ~
+        // GET /auth/youtube/authorize — redirect to YouTube for chatbot authorization
+        path("authorize") {
+          get {
+            given Scheduler = classicActorSystem.toTyped.scheduler
+            given Timeout = Timeout(appConfig.askTimeout)
+            given ExecutionContext = scala.concurrent.ExecutionContext.global
+
+            val redirectUri = buildRedirectUri(appConfig.youtube.callbackPath)
+            onComplete(youtubeOAuthActor.ask[YoutubeOAuthActor.AuthorizeStateGenerated](ref =>
+              YoutubeOAuthActor.GenerateAuthorizeState(redirectUri, ref)
+            )) {
+              case scala.util.Success(YoutubeOAuthActor.AuthorizeStateOk(_, authUrl)) =>
+                redirect(authUrl.toString, StatusCodes.Found)
+              case scala.util.Failure(ex) =>
+                complete(StatusCodes.InternalServerError -> s"OAuth state generation failed: ${ex.getMessage}")
+            }
+          }
+        } ~
+        // GET /auth/youtube/callback
+        path("callback") {
+          get {
+            extractRequest { request =>
+              val code = request.uri.query().get("code")
+              val state = request.uri.query().get("state")
+
+              (code, state) match {
+                case (Some(code), Some(state)) =>
+                  given Scheduler = classicActorSystem.toTyped.scheduler
+                  given Timeout = Timeout(appConfig.askTimeout)
+                  given ExecutionContext = scala.concurrent.ExecutionContext.global
+
+                  onComplete(youtubeOAuthActor.ask[YoutubeOAuthActor.TokenExchangeResponse](ref =>
+                    YoutubeOAuthActor.ExchangeCode(state, ref)
+                  )) {
+                    case scala.util.Success(YoutubeOAuthActor.TokenExchangeSuccess(accessToken, refreshToken, expiresIn, platformUserId, flow)) =>
+                      val expiresAt = Instant.now().plusSeconds(expiresIn)
+                      onComplete(
+                        userTokenRegistry.ask[UserTokenRegistry.YoutubePrimaryResponse](ref =>
+                          UserTokenRegistry.RegisterYoutubePrimaryConnection(
+                            platformUserId,
+                            platformUserId,
+                            accessToken,
+                            refreshToken,
+                            expiresAt,
+                            ref
+                          )
+                        )
+                      ) {
+                        case scala.util.Success(UserTokenRegistry.YoutubePrimaryRegistered(_)) =>
+                          flow match {
+                            case "login" =>
+                              onComplete(
+                                jwtActor.ask[JwtActor.EncodeResponse](ref =>
+                                  JwtActor.Encode(platformUserId, ref)
+                                )
+                              ) { jwtResult =>
+                                jwtResult match {
+                                  case scala.util.Success(JwtActor.EncodeSuccess(jwtToken)) =>
+                                    val cookie = org.apache.pekko.http.scaladsl.model.headers.HttpCookie(
+                                      "archiemate_jwt",
+                                      jwtToken,
+                                      httpOnly = true,
+                                      secure = isSecure,
+                                      maxAge = Some(appConfig.jwt.tokenLifetimeMinutes.toLong * 60)
+                                    )
+                                    setCookie(cookie) {
+                                      redirect(appConfig.youtube.callbackPath, StatusCodes.Found)
+                                    }
+                                  case scala.util.Success(JwtActor.Error(msg)) =>
+                                    redirect(s"${appConfig.youtube.callbackPath}?error=jwt_failed", StatusCodes.Found)
+                                  case scala.util.Failure(ex) =>
+                                    redirect(s"${appConfig.youtube.callbackPath}?error=jwt_failed", StatusCodes.Found)
+                                }
+                              }
+                            case "authorize" =>
+                              redirect("/dashboard", StatusCodes.Found)
+                            case _ =>
+                              redirect(appConfig.youtube.callbackPath, StatusCodes.Found)
+                          }
+                        case scala.util.Success(UserTokenRegistry.YoutubePrimaryError(msg)) =>
+                          redirect(s"${appConfig.youtube.callbackPath}?error=token_store_failed", StatusCodes.Found)
+                        case scala.util.Success(other) =>
+                          redirect(s"${appConfig.youtube.callbackPath}?error=unexpected_response", StatusCodes.Found)
+                        case scala.util.Failure(ex) =>
+                          redirect(s"${appConfig.youtube.callbackPath}?error=token_store_failed", StatusCodes.Found)
+                      }
+                    case scala.util.Success(YoutubeOAuthActor.TokenExchangeError(msg)) =>
+                      redirect(s"${appConfig.youtube.callbackPath}?error=token_exchange_failed", StatusCodes.Found)
+                    case scala.util.Failure(ex) =>
+                      redirect(s"${appConfig.youtube.callbackPath}?error=token_exchange_failed", StatusCodes.Found)
                   }
                 case _ =>
                   complete(StatusCodes.BadRequest -> "Missing code or state parameter")

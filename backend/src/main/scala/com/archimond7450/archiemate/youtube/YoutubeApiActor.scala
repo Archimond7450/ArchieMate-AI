@@ -56,6 +56,19 @@ object YoutubeApiActor {
       replyTo: ActorRef[TokenResponse]
   ) extends Command
 
+  /** Get latest uploaded videos from a channel.
+    *
+    * @param channelId   YouTube channel ID to fetch videos from
+    * @param accessToken OAuth access token with appropriate scopes
+    * @param maxResults  Maximum number of videos to return (default: 10)
+    */
+  final case class GetLatestVideos(
+      channelId: String,
+      accessToken: String,
+      maxResults: Int = 10,
+      replyTo: ActorRef[TokenResponse]
+  ) extends Command
+
   // ----------------------------------------------------------------
   // Responses
   // ----------------------------------------------------------------
@@ -75,6 +88,17 @@ object YoutubeApiActor {
       name: String,
       picture: Option[String]
   ) extends TokenResponse
+
+  final case class VideoList(
+      videos: List[VideoInfo]
+  ) extends TokenResponse
+
+  final case class VideoInfo(
+      videoId: String,
+      title: String,
+      publishedAt: String,
+      thumbnailUrl: String
+  )
 
   final case class Error(message: String) extends TokenResponse
 
@@ -115,6 +139,178 @@ object YoutubeApiActor {
         name <- c.downField("name").as[String]
         picture <- c.downField("picture").as[Option[String]]
       } yield YoutubeUserInfoResponse(id, email, verifiedEmail, name, picture)
+    }
+  }
+
+  // YouTube Data API search response models
+
+  private case class YoutubeSearchResponse(
+      items: List[SearchItem]
+  )
+
+  private object YoutubeSearchResponse {
+    implicit val decoder: Decoder[YoutubeSearchResponse] = Decoder.instance { c =>
+      for {
+        items <- c.downField("items").as[List[SearchItem]]
+      } yield YoutubeSearchResponse(items)
+    }
+  }
+
+  private case class SearchItem(
+      id: SearchId,
+      snippet: VideoSnippet
+  )
+
+  private object SearchItem {
+    implicit val decoder: Decoder[SearchItem] = Decoder.instance { c =>
+      for {
+        id <- c.downField("id").as[SearchId]
+        snippet <- c.downField("snippet").as[VideoSnippet]
+      } yield SearchItem(id, snippet)
+    }
+  }
+
+  private case class SearchId(
+      videoId: Option[String]
+  )
+
+  private object SearchId {
+    implicit val decoder: Decoder[SearchId] = Decoder.instance { c =>
+      for {
+        videoId <- c.downField("videoId").as[Option[String]]
+      } yield SearchId(videoId)
+    }
+  }
+
+  private case class VideoSnippet(
+      title: String,
+      publishedAt: String,
+      thumbnails: ThumbnailSet
+  )
+
+  private object VideoSnippet {
+    implicit val decoder: Decoder[VideoSnippet] = Decoder.instance { c =>
+      for {
+        title <- c.downField("title").as[String]
+        publishedAt <- c.downField("publishedAt").as[String]
+        thumbnails <- c.downField("thumbnails").as[ThumbnailSet]
+      } yield VideoSnippet(title, publishedAt, thumbnails)
+    }
+  }
+
+  private case class ThumbnailSet(
+      high: Option[Thumbnail]
+  )
+
+  private object ThumbnailSet {
+    implicit val decoder: Decoder[ThumbnailSet] = Decoder.instance { c =>
+      for {
+        high <- c.downField("high").as[Option[Thumbnail]]
+      } yield ThumbnailSet(high)
+    }
+  }
+
+  private case class Thumbnail(
+      url: String
+  )
+
+  private object Thumbnail {
+    implicit val decoder: Decoder[Thumbnail] = Decoder.instance { c =>
+      for {
+        url <- c.downField("url").as[String]
+      } yield Thumbnail(url)
+    }
+  }
+
+  // YouTube Data API channel response
+  private case class YoutubeChannelResponse(
+      items: List[ChannelItem]
+  )
+
+  private object YoutubeChannelResponse {
+    implicit val decoder: Decoder[YoutubeChannelResponse] = Decoder.instance { c =>
+      for {
+        items <- c.downField("items").as[List[ChannelItem]]
+      } yield YoutubeChannelResponse(items)
+    }
+  }
+
+  private case class ChannelItem(
+      contentDetails: ChannelContentDetails
+  )
+
+  private object ChannelItem {
+    implicit val decoder: Decoder[ChannelItem] = Decoder.instance { c =>
+      for {
+        contentDetails <- c.downField("contentDetails").as[ChannelContentDetails]
+      } yield ChannelItem(contentDetails)
+    }
+  }
+
+  private case class ChannelContentDetails(
+      uploadPlaylistId: String
+  )
+
+  private object ChannelContentDetails {
+    implicit val decoder: Decoder[ChannelContentDetails] = Decoder.instance { c =>
+      for {
+        uploadPlaylistId <- c.downField("uploadPlaylistId").as[String]
+      } yield ChannelContentDetails(uploadPlaylistId)
+    }
+  }
+
+  // YouTube Data API playlist items response
+  private case class YoutubePlaylistResponse(
+      items: List[PlaylistItem]
+  )
+
+  private object YoutubePlaylistResponse {
+    implicit val decoder: Decoder[YoutubePlaylistResponse] = Decoder.instance { c =>
+      for {
+        items <- c.downField("items").as[List[PlaylistItem]]
+      } yield YoutubePlaylistResponse(items)
+    }
+  }
+
+  private case class PlaylistItem(
+      snippet: PlaylistItemSnippet
+  )
+
+  private object PlaylistItem {
+    implicit val decoder: Decoder[PlaylistItem] = Decoder.instance { c =>
+      for {
+        snippet <- c.downField("snippet").as[PlaylistItemSnippet]
+      } yield PlaylistItem(snippet)
+    }
+  }
+
+  private case class PlaylistItemSnippet(
+      title: String,
+      publishedAt: String,
+      resourceId: ResourceId,
+      thumbnails: ThumbnailSet
+  )
+
+  private object PlaylistItemSnippet {
+    implicit val decoder: Decoder[PlaylistItemSnippet] = Decoder.instance { c =>
+      for {
+        title <- c.downField("title").as[String]
+        publishedAt <- c.downField("publishedAt").as[String]
+        resourceId <- c.downField("resourceId").as[ResourceId]
+        thumbnails <- c.downField("thumbnails").as[ThumbnailSet]
+      } yield PlaylistItemSnippet(title, publishedAt, resourceId, thumbnails)
+    }
+  }
+
+  private case class ResourceId(
+      videoId: Option[String]
+  )
+
+  private object ResourceId {
+    implicit val decoder: Decoder[ResourceId] = Decoder.instance { c =>
+      for {
+        videoId <- c.downField("videoId").as[Option[String]]
+      } yield ResourceId(videoId)
     }
   }
 
@@ -181,6 +377,18 @@ object YoutubeApiActor {
 
         case getCurrentUserCmd: GetCurrentUser =>
           getCurrentUser(config, getCurrentUserCmd.accessToken, getCurrentUserCmd.replyTo, httpRequestActor, baseUrl)
+          Behaviors.same
+
+        case getVideos: GetLatestVideos =>
+          getLatestVideos(
+            config,
+            getVideos.channelId,
+            getVideos.accessToken,
+            getVideos.maxResults,
+            getVideos.replyTo,
+            httpRequestActor,
+            baseUrl
+          )
           Behaviors.same
 
         case HttpRequestReply(_) =>
@@ -297,6 +505,118 @@ object YoutubeApiActor {
       ),
       entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
       decode = str => decode[YoutubeUserInfoResponse](str).toTry,
+      replyTo = probeRef
+    )
+  }
+
+  private def getLatestVideos(
+      config: YoutubeConfig,
+      channelId: String,
+      accessToken: String,
+      maxResults: Int,
+      replyTo: ActorRef[TokenResponse],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
+      baseUrl: String
+  )(using
+      ctx: ActorContext[Command],
+      scheduler: Scheduler,
+      timeout: Timeout,
+      execEc: ExecutionContext
+  ): Unit = {
+    // First, get the channel's uploads playlist ID
+    val channelQuery = Uri.Query(
+      "part" -> "contentDetails",
+      "forUsername" -> channelId,
+      "key" -> config.clientId
+    )
+    val channelUri = Uri(s"$baseUrl/youtube/v3/channels").withQuery(channelQuery)
+
+    val probeRef: ActorRef[StatusReply[Any]] = ctx.messageAdapter[StatusReply[Any]] { statusReply =>
+      statusReply match {
+        case StatusReply.Success(value) =>
+          value match {
+            case channelResp: YoutubeChannelResponse =>
+              channelResp.items.headOption match {
+                case Some(channel) =>
+                  // Got the channel, now fetch its uploads
+                  val uploadsPlaylistId = channel.contentDetails.uploadPlaylistId
+                  fetchPlaylistItems(config, uploadsPlaylistId, accessToken, maxResults, replyTo, httpRequestActor, baseUrl)
+                case None =>
+                  replyTo ! Error(s"No channel found for username: $channelId")
+              }
+            case _ =>
+              replyTo ! Error(s"Get latest videos: unexpected response type for channel lookup")
+          }
+        case StatusReply.Error(err) =>
+          handleApiError(err, replyTo, s"Get latest videos (channel lookup for $channelId)")
+      }
+      HttpRequestReply(statusReply)
+    }
+
+    httpRequestActor ! HttpRequestActor.Request[YoutubeChannelResponse](
+      method = HttpMethods.GET,
+      uri = channelUri,
+      headers = Seq(RawHeader("Authorization", s"Bearer $accessToken")),
+      entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
+      decode = str => decode[YoutubeChannelResponse](str).toTry,
+      replyTo = probeRef
+    )
+  }
+
+  /** Fetch playlist items from the channel's uploads playlist. */
+  private def fetchPlaylistItems(
+      config: YoutubeConfig,
+      playlistId: String,
+      accessToken: String,
+      maxResults: Int,
+      replyTo: ActorRef[TokenResponse],
+      httpRequestActor: ActorRef[HttpRequestActor.Command],
+      baseUrl: String
+  )(using
+      ctx: ActorContext[Command],
+      scheduler: Scheduler,
+      timeout: Timeout,
+      execEc: ExecutionContext
+  ): Unit = {
+    val query = Uri.Query(
+      "part" -> "snippet",
+      "playlistId" -> playlistId,
+      "maxResults" -> maxResults.toString,
+      "type" -> "video"
+    )
+    val uri = Uri(s"$baseUrl/youtube/v3/playlistItems").withQuery(query)
+
+    val probeRef: ActorRef[StatusReply[Any]] = ctx.messageAdapter[StatusReply[Any]] { statusReply =>
+      statusReply match {
+        case StatusReply.Success(value) =>
+          value match {
+            case playlistResp: YoutubePlaylistResponse =>
+              val videos = playlistResp.items.flatMap { item =>
+                item.snippet.thumbnails.high.map { thumb =>
+                  VideoInfo(
+                    videoId = item.snippet.resourceId.videoId.getOrElse("unknown"),
+                    title = item.snippet.title,
+                    publishedAt = item.snippet.publishedAt,
+                    thumbnailUrl = thumb.url
+                  )
+                }
+              }
+              replyTo ! VideoList(videos)
+            case _ =>
+              replyTo ! Error(s"Get latest videos: unexpected response type for playlist lookup")
+          }
+        case StatusReply.Error(err) =>
+          handleApiError(err, replyTo, s"Get latest videos (playlist lookup for $playlistId)")
+      }
+      HttpRequestReply(statusReply)
+    }
+
+    httpRequestActor ! HttpRequestActor.Request[YoutubePlaylistResponse](
+      method = HttpMethods.GET,
+      uri = uri,
+      headers = Seq(RawHeader("Authorization", s"Bearer $accessToken")),
+      entity = org.apache.pekko.http.scaladsl.model.HttpEntity.Empty,
+      decode = str => decode[YoutubePlaylistResponse](str).toTry,
       replyTo = probeRef
     )
   }

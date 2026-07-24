@@ -91,6 +91,43 @@ object UserTokenRegistry {
       replyTo: ActorRef[ConnectionResponse]
   ) extends Command
 
+  // YouTube primary connection commands
+  final case class RegisterYoutubePrimaryConnection(
+      userId: String,
+      channelId: String,
+      accessToken: String,
+      refreshToken: String,
+      expiresAt: Instant,
+      replyTo: ActorRef[YoutubePrimaryResponse]
+  ) extends Command
+  final case class GetYoutubePrimaryConnection(
+      userId: String,
+      replyTo: ActorRef[YoutubePrimaryResponse]
+  ) extends Command
+  final case class RevokeYoutubePrimaryConnection(
+      userId: String,
+      replyTo: ActorRef[YoutubePrimaryResponse]
+  ) extends Command
+
+  // YouTube secondary connection commands
+  final case class RegisterYoutubeSecondaryConnection(
+      userId: String,
+      channelId: String,
+      accessToken: String,
+      refreshToken: String,
+      expiresAt: Instant,
+      replyTo: ActorRef[YoutubeSecondaryResponse]
+  ) extends Command
+  final case class GetYoutubeSecondaryConnections(
+      userId: String,
+      replyTo: ActorRef[YoutubeSecondaryResponse]
+  ) extends Command
+  final case class RevokeYoutubeSecondaryConnection(
+      userId: String,
+      channelId: String,
+      replyTo: ActorRef[YoutubeSecondaryResponse]
+  ) extends Command
+
   // ----------------------------------------------------------------
   // Responses
   // ----------------------------------------------------------------
@@ -122,6 +159,19 @@ object UserTokenRegistry {
   final case class ConnectionRegistered(platform: String, channelId: String) extends ConnectionResponse
   final case class ConnectionRevoked(platform: String, channelId: String) extends ConnectionResponse
   case object ConnectionNotFound extends ConnectionResponse
+
+  sealed trait YoutubePrimaryResponse
+  final case class YoutubePrimaryRegistered(channelId: String) extends YoutubePrimaryResponse
+  final case class YoutubePrimaryRevoked(channelId: String) extends YoutubePrimaryResponse
+  final case class YoutubePrimaryFound(connection: UserTokenActor.PlatformConnection) extends YoutubePrimaryResponse
+  case object YoutubePrimaryNotFound extends YoutubePrimaryResponse
+  final case class YoutubePrimaryError(message: String) extends YoutubePrimaryResponse
+
+  sealed trait YoutubeSecondaryResponse
+  final case class YoutubeSecondaryRegistered(channelId: String) extends YoutubeSecondaryResponse
+  final case class YoutubeSecondaryRevoked(channelId: String) extends YoutubeSecondaryResponse
+  final case class YoutubeSecondaryConnectionsFound(connections: List[UserTokenActor.PlatformConnection]) extends YoutubeSecondaryResponse
+  final case class YoutubeSecondaryError(message: String) extends YoutubeSecondaryResponse
 
   // ----------------------------------------------------------------
   // Internal state
@@ -249,6 +299,66 @@ object UserTokenRegistry {
               forwardCommand(revoke, actorRef)
               Behaviors.same
           }
+
+        case register: RegisterYoutubePrimaryConnection =>
+          getOrCreateUserActor(register.userId, state) match {
+            case Left(error) =>
+              register.replyTo ! YoutubePrimaryError(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardYoutubeCommand(register, actorRef)
+              Behaviors.same
+          }
+
+        case get: GetYoutubePrimaryConnection =>
+          getOrCreateUserActor(get.userId, state) match {
+            case Left(error) =>
+              get.replyTo ! YoutubePrimaryError(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardYoutubeCommand(get, actorRef)
+              Behaviors.same
+          }
+
+        case revoke: RevokeYoutubePrimaryConnection =>
+          getOrCreateUserActor(revoke.userId, state) match {
+            case Left(error) =>
+              revoke.replyTo ! YoutubePrimaryError(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardYoutubeCommand(revoke, actorRef)
+              Behaviors.same
+          }
+
+        case register: RegisterYoutubeSecondaryConnection =>
+          getOrCreateUserActor(register.userId, state) match {
+            case Left(error) =>
+              register.replyTo ! YoutubeSecondaryError(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardYoutubeCommand(register, actorRef)
+              Behaviors.same
+          }
+
+        case get: GetYoutubeSecondaryConnections =>
+          getOrCreateUserActor(get.userId, state) match {
+            case Left(error) =>
+              get.replyTo ! YoutubeSecondaryError(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardYoutubeCommand(get, actorRef)
+              Behaviors.same
+          }
+
+        case revoke: RevokeYoutubeSecondaryConnection =>
+          getOrCreateUserActor(revoke.userId, state) match {
+            case Left(error) =>
+              revoke.replyTo ! YoutubeSecondaryError(error)
+              Behaviors.same
+            case Right(actorRef) =>
+              forwardYoutubeCommand(revoke, actorRef)
+              Behaviors.same
+          }
       }
     )
 
@@ -316,6 +426,42 @@ object UserTokenRegistry {
     given AskBuilder[RevokePlatformConnection, UserTokenActor.ConnectionResponse] with
       def buildAsk(cmd: RevokePlatformConnection, ref: ActorRef[UserTokenActor.ConnectionResponse]): UserTokenActor.Command =
         UserTokenActor.RevokePlatformConnection(cmd.platform, cmd.channelId, ref)
+
+    given AskBuilder[RegisterYoutubePrimaryConnection, UserTokenActor.YoutubePrimaryResponse] with
+      def buildAsk(cmd: RegisterYoutubePrimaryConnection, ref: ActorRef[UserTokenActor.YoutubePrimaryResponse]): UserTokenActor.Command =
+        UserTokenActor.RegisterYoutubePrimaryConnection(
+          cmd.channelId,
+          cmd.accessToken,
+          cmd.refreshToken,
+          cmd.expiresAt,
+          ref
+        )
+
+    given AskBuilder[GetYoutubePrimaryConnection, UserTokenActor.YoutubePrimaryResponse] with
+      def buildAsk(cmd: GetYoutubePrimaryConnection, ref: ActorRef[UserTokenActor.YoutubePrimaryResponse]): UserTokenActor.Command =
+        UserTokenActor.GetYoutubePrimaryConnection(ref)
+
+    given AskBuilder[RevokeYoutubePrimaryConnection, UserTokenActor.YoutubePrimaryResponse] with
+      def buildAsk(cmd: RevokeYoutubePrimaryConnection, ref: ActorRef[UserTokenActor.YoutubePrimaryResponse]): UserTokenActor.Command =
+        UserTokenActor.RevokeYoutubePrimaryConnection(ref)
+
+    given AskBuilder[RegisterYoutubeSecondaryConnection, UserTokenActor.YoutubeSecondaryResponse] with
+      def buildAsk(cmd: RegisterYoutubeSecondaryConnection, ref: ActorRef[UserTokenActor.YoutubeSecondaryResponse]): UserTokenActor.Command =
+        UserTokenActor.RegisterYoutubeSecondaryConnection(
+          cmd.channelId,
+          cmd.accessToken,
+          cmd.refreshToken,
+          cmd.expiresAt,
+          ref
+        )
+
+    given AskBuilder[GetYoutubeSecondaryConnections, UserTokenActor.YoutubeSecondaryResponse] with
+      def buildAsk(cmd: GetYoutubeSecondaryConnections, ref: ActorRef[UserTokenActor.YoutubeSecondaryResponse]): UserTokenActor.Command =
+        UserTokenActor.GetYoutubeSecondaryConnections(ref)
+
+    given AskBuilder[RevokeYoutubeSecondaryConnection, UserTokenActor.YoutubeSecondaryResponse] with
+      def buildAsk(cmd: RevokeYoutubeSecondaryConnection, ref: ActorRef[UserTokenActor.YoutubeSecondaryResponse]): UserTokenActor.Command =
+        UserTokenActor.RevokeYoutubeSecondaryConnection(cmd.channelId, ref)
   }
 
   /** Forwards a command to a per-user [[UserTokenActor]] and handles the response.
@@ -348,6 +494,130 @@ object UserTokenRegistry {
       case scala.util.Failure(ex) =>
         handleFailure(cmd, ex)
     }(ec)
+  }
+
+  /** Forwards a YouTube command to a per-user [[UserTokenActor]] and handles the response. */
+  private def forwardYoutubeCommand[Cmd, Resp](
+      cmd: Cmd,
+      actorRef: ActorRef[UserTokenActor.Command]
+  )(using
+      builder: AskBuilder[Cmd, Resp],
+      scheduler: org.apache.pekko.actor.typed.Scheduler,
+      timeout: Timeout,
+      ec: ExecutionContext
+  ): Unit = {
+    val future = actorRef ? { (ref: ActorRef[Resp]) =>
+      builder.buildAsk(cmd, ref)
+    }
+    future.onComplete {
+      case scala.util.Success(resp) =>
+        resp match {
+          case err: UserTokenActor.Error =>
+            handleYoutubeError(cmd, err)
+          case other =>
+            handleYoutubeSuccess(cmd, other.asInstanceOf[UserTokenActor.YoutubePrimaryResponse | UserTokenActor.YoutubeSecondaryResponse])
+        }
+      case scala.util.Failure(ex) =>
+        handleYoutubeFailure(cmd, ex)
+    }(ec)
+  }
+
+  private def handleYoutubeSuccess[Cmd](
+      cmd: Cmd,
+      resp: UserTokenActor.YoutubePrimaryResponse | UserTokenActor.YoutubeSecondaryResponse
+  ): Unit = cmd match {
+    case register: RegisterYoutubePrimaryConnection =>
+      resp match {
+        case UserTokenActor.YoutubePrimaryRegistered(channelId) =>
+          register.replyTo ! YoutubePrimaryRegistered(channelId)
+        case UserTokenActor.Error(msg) =>
+          register.replyTo ! YoutubePrimaryError(msg)
+        case _ =>
+          register.replyTo ! YoutubePrimaryError(s"Unexpected response: $resp")
+      }
+    case get: GetYoutubePrimaryConnection =>
+      resp match {
+        case UserTokenActor.YoutubePrimaryFound(conn) =>
+          get.replyTo ! YoutubePrimaryFound(conn)
+        case UserTokenActor.YoutubePrimaryNotFound =>
+          get.replyTo ! YoutubePrimaryNotFound
+        case UserTokenActor.Error(msg) =>
+          get.replyTo ! YoutubePrimaryError(msg)
+        case _ =>
+          get.replyTo ! YoutubePrimaryError(s"Unexpected response: $resp")
+      }
+    case revoke: RevokeYoutubePrimaryConnection =>
+      resp match {
+        case UserTokenActor.YoutubePrimaryRevoked(channelId) =>
+          revoke.replyTo ! YoutubePrimaryRevoked(channelId)
+        case UserTokenActor.Error(msg) =>
+          revoke.replyTo ! YoutubePrimaryError(msg)
+        case _ =>
+          revoke.replyTo ! YoutubePrimaryError(s"Unexpected response: $resp")
+      }
+    case register: RegisterYoutubeSecondaryConnection =>
+      resp match {
+        case UserTokenActor.YoutubeSecondaryRegistered(channelId) =>
+          register.replyTo ! YoutubeSecondaryRegistered(channelId)
+        case UserTokenActor.Error(msg) =>
+          register.replyTo ! YoutubeSecondaryError(msg)
+        case _ =>
+          register.replyTo ! YoutubeSecondaryError(s"Unexpected response: $resp")
+      }
+    case get: GetYoutubeSecondaryConnections =>
+      resp match {
+        case UserTokenActor.YoutubeSecondaryConnectionsFound(connections) =>
+          get.replyTo ! YoutubeSecondaryConnectionsFound(connections)
+        case UserTokenActor.Error(msg) =>
+          get.replyTo ! YoutubeSecondaryError(msg)
+        case _ =>
+          get.replyTo ! YoutubeSecondaryError(s"Unexpected response: $resp")
+      }
+    case revoke: RevokeYoutubeSecondaryConnection =>
+      resp match {
+        case UserTokenActor.YoutubeSecondaryRevoked(channelId) =>
+          revoke.replyTo ! YoutubeSecondaryRevoked(channelId)
+        case UserTokenActor.Error(msg) =>
+          revoke.replyTo ! YoutubeSecondaryError(msg)
+        case _ =>
+          revoke.replyTo ! YoutubeSecondaryError(s"Unexpected response: $resp")
+      }
+  }
+
+  private def handleYoutubeError[Cmd](
+      cmd: Cmd,
+      err: UserTokenActor.Error
+  ): Unit = cmd match {
+    case register: RegisterYoutubePrimaryConnection =>
+      register.replyTo ! YoutubePrimaryError(err.message)
+    case get: GetYoutubePrimaryConnection =>
+      get.replyTo ! YoutubePrimaryError(err.message)
+    case revoke: RevokeYoutubePrimaryConnection =>
+      revoke.replyTo ! YoutubePrimaryError(err.message)
+    case register: RegisterYoutubeSecondaryConnection =>
+      register.replyTo ! YoutubeSecondaryError(err.message)
+    case get: GetYoutubeSecondaryConnections =>
+      get.replyTo ! YoutubeSecondaryError(err.message)
+    case revoke: RevokeYoutubeSecondaryConnection =>
+      revoke.replyTo ! YoutubeSecondaryError(err.message)
+  }
+
+  private def handleYoutubeFailure[Cmd](
+      cmd: Cmd,
+      ex: Throwable
+  ): Unit = cmd match {
+    case register: RegisterYoutubePrimaryConnection =>
+      register.replyTo ! YoutubePrimaryError(s"Command failed: ${ex.getMessage}")
+    case get: GetYoutubePrimaryConnection =>
+      get.replyTo ! YoutubePrimaryError(s"Command failed: ${ex.getMessage}")
+    case revoke: RevokeYoutubePrimaryConnection =>
+      revoke.replyTo ! YoutubePrimaryError(s"Command failed: ${ex.getMessage}")
+    case register: RegisterYoutubeSecondaryConnection =>
+      register.replyTo ! YoutubeSecondaryError(s"Command failed: ${ex.getMessage}")
+    case get: GetYoutubeSecondaryConnections =>
+      get.replyTo ! YoutubeSecondaryError(s"Command failed: ${ex.getMessage}")
+    case revoke: RevokeYoutubeSecondaryConnection =>
+      revoke.replyTo ! YoutubeSecondaryError(s"Command failed: ${ex.getMessage}")
   }
 
   private def handleSuccess[Cmd, Resp](

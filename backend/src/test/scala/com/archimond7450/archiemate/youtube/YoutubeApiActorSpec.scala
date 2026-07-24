@@ -49,7 +49,8 @@ class YoutubeApiActorSpec
   private val youtubeConfig: YoutubeConfig = YoutubeConfig(
     clientId = "test-youtube-client-id",
     clientSecret = "test-youtube-client-secret",
-    callbackPath = "/auth/youtube/callback"
+    callbackPath = "/auth/youtube/callback",
+    scopes = List.empty
   )
 
   private def spawnHttpClient(): ActorRef[HttpClientActor.Command] = {

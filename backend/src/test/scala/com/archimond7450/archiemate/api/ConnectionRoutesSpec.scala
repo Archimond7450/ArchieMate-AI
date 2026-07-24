@@ -3,6 +3,7 @@ package com.archimond7450.archiemate.api
 import com.archimond7450.archiemate.auth.JwtActor
 import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, TwitchIrcConfig, WebSocketConfig, YoutubeConfig}
 import com.archimond7450.archiemate.twitch.eventsub.EventSubConfig
+import com.archimond7450.archiemate.user.UserConfigRegistry
 import com.archimond7450.archiemate.user.UserTokenRegistry
 import com.archimond7450.archiemate.user.UserTokenRegistry.{*, given}
 import com.archimond7450.archiemate.user.UserTokenActor
@@ -54,7 +55,8 @@ class ConnectionRoutesSpec
     youtube = YoutubeConfig(
       clientId = "",
       clientSecret = "",
-      callbackPath = ""
+      callbackPath = "",
+      scopes = List.empty
     ),
     twitchIrc = TwitchIrcConfig(
       scheme = "wss",
@@ -98,10 +100,15 @@ class ConnectionRoutesSpec
     TestProbe[UserTokenRegistry.Command]("user-token-registry")
   private val userTokenRegistry = userTokenRegistryProbe.ref
 
+  private val userConfigRegistryProbe: TestProbe[UserConfigRegistry.Command] =
+    TestProbe[UserConfigRegistry.Command]("user-config-registry")
+  private val userConfigRegistry = userConfigRegistryProbe.ref
+
   private val connectionRoutes = new ConnectionRoutes(
     testConfig,
     jwtActor,
     userTokenRegistry,
+    userConfigRegistry,
     scheduler,
     Timeout(10.seconds),
     scala.concurrent.ExecutionContext.global,

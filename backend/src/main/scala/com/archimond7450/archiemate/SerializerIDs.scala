@@ -6,4 +6,5 @@ package com.archimond7450.archiemate
   */
 object SerializerIDs {
   val userTokenActorId: Int = 1001
+  val userConfigActorId: Int = 1002
 }

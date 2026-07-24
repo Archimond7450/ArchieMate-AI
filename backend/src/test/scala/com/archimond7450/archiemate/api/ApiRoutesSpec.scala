@@ -3,13 +3,13 @@ package com.archimond7450.archiemate.api
 import com.archimond7450.archiemate.ReadinessTracker
 import com.archimond7450.archiemate.ReadinessTracker.ReadyResponse
 import com.archimond7450.archiemate.ReadinessTracker.NotReadyResponse
-import com.archimond7450.archiemate.auth.JwtActor
+import com.archimond7450.archiemate.auth.{JwtActor, YoutubeOAuthActor}
 import com.archimond7450.archiemate.kick.KickApiActor
 import com.archimond7450.archiemate.settings.{AppConfig, DatabaseConfig, HttpClientConfig, JwtConfig, KickConfig, ServerConfig, TwitchConfig, TwitchIrcConfig, WebSocketConfig, YoutubeConfig}
 import com.archimond7450.archiemate.twitch.eventsub.EventSubConfig
 import com.archimond7450.archiemate.youtube.YoutubeApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
-import com.archimond7450.archiemate.user.UserTokenRegistry
+import com.archimond7450.archiemate.user.{UserConfigRegistry, UserTokenRegistry}
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe
 import org.apache.pekko.actor.typed.Scheduler
@@ -55,7 +55,8 @@ class ApiRoutesSpec
     youtube = YoutubeConfig(
       clientId = "",
       clientSecret = "",
-      callbackPath = ""
+      callbackPath = "",
+      scopes = List.empty
     ),
     twitchIrc = TwitchIrcConfig(
       scheme = "wss",
@@ -111,6 +112,14 @@ class ApiRoutesSpec
     TestProbe[UserTokenRegistry.Command]("user-token-registry")
   private val userTokenRegistry = userTokenRegistryProbe.ref
 
+  private val userConfigRegistryProbe: TestProbe[UserConfigRegistry.Command] =
+    TestProbe[UserConfigRegistry.Command]("user-config-registry")
+  private val userConfigRegistry = userConfigRegistryProbe.ref
+
+  private val youtubeOAuthProbe: TestProbe[YoutubeOAuthActor.Command] =
+    TestProbe[YoutubeOAuthActor.Command]("youtube-oauth")
+  private val youtubeOAuthActor = youtubeOAuthProbe.ref
+
   private val eventSubActorProbe: TestProbe[com.archimond7450.archiemate.twitch.eventsub.EventSubActor.Command] =
     TestProbe[com.archimond7450.archiemate.twitch.eventsub.EventSubActor.Command]("eventsub-actor")
   private val eventSubActor = eventSubActorProbe.ref
@@ -122,8 +131,10 @@ class ApiRoutesSpec
     twitchApiActor,
     kickApiActor,
     youtubeApiActor,
+    youtubeOAuthActor,
     eventSubActor,
     userTokenRegistry,
+    userConfigRegistry,
     classicSystem
   ).apiRoutes
 

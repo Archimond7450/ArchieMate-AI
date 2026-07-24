@@ -323,9 +323,78 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [ ] `!alias rename x y` — rename alias
 - [ ] `!alias delete/remove x` — delete alias
 
+### Phase 17.5: YouTube Connections ✅ COMPLETE
+- [x] Backend: UserTokenActor — split YouTube connections into `primary` (one) and `secondary` (multiple)
+  - `YoutubePrimaryConnectionRegistered` / `YoutubePrimaryConnectionUpdated` / `YoutubePrimaryConnectionRevoked` events
+  - `YoutubeSecondaryConnectionRegistered` / `YoutubeSecondaryConnectionUpdated` / `YoutubeSecondaryConnectionRevoked` events
+  - `YoutubePrimaryConnectionFound` / `YoutubePrimaryConnectionNotFound` responses
+  - `YoutubeSecondaryConnectionsFound` response
+  - **Note**: YouTube ad config moved to UserConfigActor (see below)
+- [x] Backend: UserConfigActor — NEW persistent per-user configuration actor
+  - Generic key-value config storage (key → value)
+  - `ConfigEntrySet` / `ConfigEntryDeleted` events
+  - `SetConfig` / `GetConfig` / `DeleteConfig` / `ListConfigs` commands
+  - Persists all user configuration via event sourcing
+- [x] Backend: UserConfigRegistry — manages per-user UserConfigActor instances
+  - Spawns/caches UserConfigActor per userId
+  - Forwards commands to per-user actors
+  - Handles success/error/failure responses
+- [x] Backend: YoutubeApiActor — add `GetLatestVideos(userId, accessToken, maxResults)` command
+  - Queries YouTube Data API v3 `channels.list` → `playlistItems.list` for uploaded videos
+  - Returns `VideoList` with video ID, title, publishedAt, thumbnail URL
+- [x] Backend: YoutubeOAuthActor — NEW OAuth 2.0 flow for YouTube
+  - State generation, code exchange, user info retrieval
+  - Default scopes: `youtube.force-ssl`, `youtube.upload`, `youtubepartner`, `openid`, `email`
+- [x] Backend: ConnectionRoutes — YouTube connection CRUD endpoints
+  - `GET /api/v1/connections/youtube/primary` — get primary YouTube connection
+  - `POST /api/v1/connections/youtube/primary` — register primary YouTube connection
+  - `DELETE /api/v1/connections/youtube/primary` — revoke primary YouTube connection
+  - `GET /api/v1/connections/youtube/secondary` — list all secondary YouTube connections
+  - `POST /api/v1/connections/youtube/secondary` — register secondary YouTube connection
+  - `DELETE /api/v1/connections/youtube/secondary/{channelId}` — revoke secondary YouTube connection
+- [x] Backend: ConnectionRoutes — YouTube ad config endpoints
+  - `GET /api/v1/youtube/ads` — get user's YouTube ad configuration (stored in UserConfigActor)
+  - `PUT /api/v1/youtube/ads` — update user's YouTube ad configuration (stored in UserConfigActor)
+  - Config stored as JSON under key `"youtube.ads"` in UserConfigActor
+- [x] Backend: ApiRoutes — new `/api/v1/youtube/videos` endpoint
+  - `GET /api/v1/youtube/videos?channelId=xxx&maxResults=10` — fetch latest videos from a YouTube connection
+- [x] Backend: AppConfig — removed global `youtubeAds` config (now per-user)
+- [x] Backend: application.conf — removed `archiemate.youtube-ads` section
+- [x] Frontend: UserStore — YouTube connection and ad config state
+  - `isYoutubeConnected: Var[Boolean]` — primary YouTube connection status
+  - `youtubeConnectionExpiry: Var[String]` — primary YouTube connection expiry
+  - `youtubeConnections: Var[Seq[YoutubeConnection]]` — all YouTube connections (primary + secondary)
+  - `youtubeAdsConfig: Var[YoutubeAdsConfig]` — per-user ad configuration
+  - `fetchYoutubeConnectionStatus()` — fetch primary connection status
+  - `fetchYoutubeConnections()` — fetch all YouTube connections
+  - `fetchYoutubeAdsConfig()` — fetch ad configuration from backend
+  - `saveYoutubeAdsConfig(adMode, adIntervalSeconds, adDescriptionParagraph)` — save ad configuration to backend
+  - `revokeYoutubeConnection()` — revoke primary connection
+  - `registerYoutubeConnection(channelId, accessToken, refreshToken, expiresIn)` — register connection
+  - `revokeYoutubeConnection(channelId)` — revoke specific connection
+- [x] Frontend: DashboardPage — YouTube connection and ad config UI
+  - YouTube connection card with status badge, expiry, connect/reconnect/disconnect buttons
+  - Secondary connections list with revoke buttons
+  - YouTube ad configuration section:
+    - Radio buttons for ad mode (title vs description)
+    - Number input for ad interval (seconds)
+    - Conditional number input for description paragraph index
+  - Info section about platform connections
+- [x] Frontend: example.env — YouTube OAuth environment variables already present
+
+**Design decisions:**
+- Primary YouTube connection is stored separately from secondary connections in UserTokenActor to enforce the "one primary" constraint
+- Secondary connections share the same underlying data structure as Twitch/Kick connections (a list per platform)
+- YouTube videos endpoint accepts a `channelId` parameter to query any secondary connection
+- YouTube ad configuration is stored per-user in UserConfigActor (persistent via event sourcing)
+- UserConfigActor is a generic key-value store for all future user configuration
+- YouTube ad configuration is configurable in the Dashboard UI (not global config)
+- YouTube connection card mirrors the Twitch/Kick card UI pattern for consistency
+
 ### Phase 18: Frontend Pages
 - [ ] Settings page
 - [ ] Chat viewer component
+- [ ] YouTube connection settings (ad mode, interval, description paragraph)
 
 ### Phase 19: Production Hardening
 - [ ] Health check improvements (database connectivity)

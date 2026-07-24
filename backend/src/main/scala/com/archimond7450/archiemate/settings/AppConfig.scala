@@ -51,7 +51,8 @@ case class KickConfig(
 case class YoutubeConfig(
     clientId: String,
     clientSecret: String,
-    callbackPath: String
+    callbackPath: String,
+    scopes: List[String]
 )
 
 case class WebSocketConfig(
@@ -143,7 +144,8 @@ object AppConfig {
         YoutubeConfig(
           clientId = resolveString(youtubeConf, "client-id", ""),
           clientSecret = resolveString(youtubeConf, "client-secret", ""),
-          callbackPath = resolveString(youtubeConf, "callback-path", "")
+          callbackPath = resolveString(youtubeConf, "callback-path", ""),
+          scopes = resolveScopes(youtubeConf, "scopes", List.empty)
         )
       },
       websocket = WebSocketConfig(

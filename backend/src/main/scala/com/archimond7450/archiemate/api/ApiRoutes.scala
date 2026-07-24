@@ -19,7 +19,8 @@ import com.archimond7450.archiemate.kick.KickApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
 import com.archimond7450.archiemate.twitch.eventsub.EventSubWebhookRoutes
 import com.archimond7450.archiemate.youtube.YoutubeApiActor
-import com.archimond7450.archiemate.user.UserTokenRegistry
+import com.archimond7450.archiemate.auth.YoutubeOAuthActor
+import com.archimond7450.archiemate.user.{UserConfigRegistry, UserTokenRegistry}
 import io.circe.Encoder
 import io.circe.generic.semiauto.deriveEncoder
 import io.circe.syntax.EncoderOps
@@ -54,6 +55,25 @@ object TwitchProfileResponse {
   given Encoder[TwitchProfileResponse] = deriveEncoder
 }
 
+final case class VideoResponse(
+    video_id: String,
+    title: String,
+    published_at: String,
+    thumbnail_url: String
+)
+
+object VideoResponse {
+  given Encoder[VideoResponse] = deriveEncoder
+}
+
+final case class VideoListResponse(
+    videos: List[VideoResponse]
+)
+
+object VideoListResponse {
+  given Encoder[VideoListResponse] = deriveEncoder
+}
+
 class ApiRoutes(
     config: AppConfig,
     readinessTracker: ActorRef[ReadinessTracker.Command],
@@ -61,8 +81,10 @@ class ApiRoutes(
     twitchApiActor: ActorRef[TwitchApiActor.Command],
     kickApiActor: ActorRef[KickApiActor.Command],
     youtubeApiActor: ActorRef[YoutubeApiActor.Command],
+    youtubeOAuthActor: ActorRef[YoutubeOAuthActor.Command],
     eventSubActor: ActorRef[com.archimond7450.archiemate.twitch.eventsub.EventSubActor.Command],
     userTokenRegistry: ActorRef[UserTokenRegistry.Command],
+    userConfigRegistry: ActorRef[UserConfigRegistry.Command],
     classicActorSystem: ActorSystem
 ) {
 
@@ -70,6 +92,7 @@ class ApiRoutes(
     config,
     jwtActor,
     userTokenRegistry,
+    userConfigRegistry,
     classicActorSystem.toTyped.scheduler,
     Timeout(config.askTimeout),
     scala.concurrent.ExecutionContext.global,
@@ -83,6 +106,15 @@ class ApiRoutes(
   ).webhookRoutes
 
   private val apiVersion = config.server.apiVersion
+
+  private def encodeVideoList(videos: List[YoutubeApiActor.VideoInfo]): String = {
+    val encoder = deriveEncoder[VideoListResponse]
+    VideoListResponse(
+      videos.map { v =>
+        VideoResponse(v.videoId, v.title, v.publishedAt, v.thumbnailUrl)
+      }
+    ).asJson.noSpaces
+  }
 
   def apiRoutes: Route = {
     pathPrefix("api") {
@@ -216,6 +248,72 @@ class ApiRoutes(
         path("auth") {
           get {
             complete(StatusCodes.OK -> "Auth endpoints available")
+          }
+        } ~
+        // YouTube videos endpoint
+        path("youtube" / "videos") {
+          get {
+            given Scheduler = classicActorSystem.toTyped.scheduler
+            given Timeout = Timeout(config.askTimeout)
+            given ExecutionContext = scala.concurrent.ExecutionContext.global
+            extractRequest { request =>
+              request.cookies.find(_.name == JwtCookieName) match {
+                case Some(cookie) =>
+                  onComplete(AuthDirectives.authenticateToken(cookie.value, jwtActor)) {
+                    case Success(Right(userId)) =>
+                      // Extract query parameters
+                      val params = request.uri.query()
+                      val channelId = params.get("channelId").getOrElse("")
+                      val maxResults = params.get("maxResults").map(_.toInt).getOrElse(10)
+
+                      if (channelId.isEmpty) {
+                        complete(StatusCodes.BadRequest -> "Missing channelId parameter")
+                      } else {
+                        // Get the YouTube connection for this channel
+                        onComplete(
+                          userTokenRegistry.ask[UserTokenRegistry.YoutubeSecondaryResponse](ref =>
+                            UserTokenRegistry.GetYoutubeSecondaryConnections(userId, ref)
+                          )
+                        ) {
+                          case Success(UserTokenRegistry.YoutubeSecondaryConnectionsFound(connections)) =>
+                            connections.find(_.channelId == channelId) match {
+                              case Some(conn) =>
+                                onComplete(
+                                  youtubeApiActor.ask[YoutubeApiActor.TokenResponse](ref =>
+                                    YoutubeApiActor.GetLatestVideos(channelId, conn.accessToken, maxResults, ref)
+                                  )
+                                ) {
+                                  case Success(YoutubeApiActor.VideoList(videos)) =>
+                                    complete(StatusCodes.OK -> encodeVideoList(videos))
+                                  case Success(YoutubeApiActor.TokenRefreshed(_, _, _)) =>
+                                    complete(StatusCodes.InternalServerError -> "Unexpected token refresh response")
+                                  case Success(YoutubeApiActor.UserFound(_, _, _, _, _)) =>
+                                    complete(StatusCodes.InternalServerError -> "Unexpected user found response")
+                                  case Success(YoutubeApiActor.Error(msg)) =>
+                                    complete(StatusCodes.InternalServerError -> msg)
+                                  case Failure(ex) =>
+                                    complete(StatusCodes.InternalServerError -> ex.getMessage)
+                                }
+                              case None =>
+                                complete(StatusCodes.NotFound -> s"No YouTube connection found for channel: $channelId")
+                            }
+                          case Success(UserTokenRegistry.YoutubeSecondaryError(msg)) =>
+                            complete(StatusCodes.InternalServerError -> msg)
+                          case Success(other) =>
+                            complete(StatusCodes.InternalServerError -> s"Unexpected response: $other")
+                          case Failure(ex) =>
+                            complete(StatusCodes.InternalServerError -> ex.getMessage)
+                        }
+                      }
+                    case Success(Left(_)) =>
+                      complete(StatusCodes.Unauthorized -> "Invalid token")
+                    case Failure(_) =>
+                      complete(StatusCodes.Unauthorized -> "Token authentication failed")
+                  }
+                case None =>
+                  complete(StatusCodes.Unauthorized -> "Missing authentication")
+              }
+            }
           }
         }
       }

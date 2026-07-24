@@ -20,7 +20,8 @@ import com.archimond7450.archiemate.kick.KickApiActor
 import com.archimond7450.archiemate.twitch.TwitchApiActor
 import com.archimond7450.archiemate.twitch.eventsub.EventSubActor
 import com.archimond7450.archiemate.youtube.YoutubeApiActor
-import com.archimond7450.archiemate.user.UserTokenRegistry
+import com.archimond7450.archiemate.auth.YoutubeOAuthActor
+import com.archimond7450.archiemate.user.{UserConfigRegistry, UserTokenRegistry}
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.util.{Failure, Success}
@@ -83,6 +84,10 @@ object ArchieMateApp {
         UserTokenRegistry(),
         "user-token-registry"
       )
+      val userConfigRegistry = innerCtx.spawn(
+        UserConfigRegistry(),
+        "user-config-registry"
+      )
       val kickOAuthActor = innerCtx.spawn(
         KickOAuthActor(appConfig.kick, httpRequestActor, userTokenRegistry),
         "kick-oauth-actor"
@@ -99,6 +104,10 @@ object ArchieMateApp {
         Behaviors.supervise(YoutubeApiActor(appConfig.youtube, httpRequestActor, userTokenRegistry)).onFailure[Throwable](SupervisorStrategy.resume),
         "youtube-api-actor"
       )
+      val youtubeOAuthActor = innerCtx.spawn(
+        YoutubeOAuthActor(appConfig.youtube, httpRequestActor, userTokenRegistry),
+        "youtube-oauth-actor"
+      )
       val eventSubActor = innerCtx.spawn[EventSubActor.Command](
         Behaviors.supervise(
           EventSubActor(
@@ -113,11 +122,12 @@ object ArchieMateApp {
 
       Behaviors.receiveMessage {
         case StartHttp =>
-          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, kickApiActor, youtubeApiActor, eventSubActor, userTokenRegistry, classicSystem.classicSystem)
+          val apiRoutes = new ApiRoutes(appConfig, tracker, jwtActor, twitchApiActor, kickApiActor, youtubeApiActor, youtubeOAuthActor, eventSubActor, userTokenRegistry, userConfigRegistry, classicSystem.classicSystem)
           val authRoutes = new AuthRoutes(
             appConfig,
             twitchOAuthActor,
             kickOAuthActor,
+            youtubeOAuthActor,
             userTokenRegistry,
             jwtActor,
             classicSystem.classicSystem

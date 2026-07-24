@@ -310,6 +310,250 @@ object DashboardPage {
           )
         ),
 
+        // YouTube connection card
+        div(
+          cls("bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6"),
+          div(
+            cls("flex items-center justify-between mb-4"),
+            h2(
+              cls("text-xl font-semibold"),
+              "YouTube Connection"
+            ),
+            children <-- UserStore.isYoutubeConnected.signal.map { connected =>
+              Seq(statusBadge(connected))
+            }
+          ),
+          div(
+            cls("space-y-4"),
+            // Connection details
+            div(
+              cls("grid grid-cols-1 sm:grid-cols-2 gap-4"),
+              div(
+                cls("text-sm text-gray-500 dark:text-gray-400"),
+                "Status"
+              ),
+              div(
+                cls("text-sm font-medium text-gray-900 dark:text-white"),
+                children <-- UserStore.isYoutubeConnected.signal.map { connected =>
+                  if (connected) Seq(span("Connected")) else Seq(span("Not connected"))
+                }
+              ),
+              div(
+                cls("text-sm text-gray-500 dark:text-gray-400"),
+                "Token expires"
+              ),
+              div(
+                cls("text-sm font-medium text-gray-900 dark:text-white"),
+                children <-- UserStore.youtubeConnectionExpiry.signal.map { expiry =>
+                  Seq(span(formatDate(expiry)))
+                }
+              )
+            ),
+            // Divider
+            div(cls("border-t border-gray-200 dark:border-gray-700")),
+            // Actions
+            div(
+              cls("flex flex-wrap gap-3"),
+              children <-- UserStore.isYoutubeConnected.signal.map { connected =>
+                if (!connected) {
+                  Seq(
+                    actionButton(
+                      "Connect YouTube",
+                      handler = { _ =>
+                        dom.window.location.href = "/auth/youtube/authorize"
+                      },
+                      disabled = false,
+                      variant = "primary"
+                    )
+                  )
+                } else if (confirmDisconnect.now()) {
+                  Seq(
+                    actionButton(
+                      "Confirm disconnect",
+                      handler = { _ =>
+                        UserStore.revokeYoutubeConnection()
+                        confirmDisconnect.set(false)
+                      },
+                      disabled = false,
+                      variant = "danger"
+                    ),
+                    actionButton(
+                      "Cancel",
+                      handler = { _ =>
+                        confirmDisconnect.set(false)
+                      },
+                      disabled = false,
+                      variant = "outline"
+                    )
+                  )
+                } else {
+                  Seq(
+                    actionButton(
+                      "Reconnect",
+                      handler = { _ =>
+                        dom.window.location.href = "/auth/youtube/authorize"
+                      },
+                      disabled = false,
+                      variant = "primary"
+                    ),
+                    actionButton(
+                      "Disconnect",
+                      handler = { _ =>
+                        confirmDisconnect.set(true)
+                      },
+                      disabled = false,
+                      variant = "danger"
+                    )
+                  )
+                }
+              }
+            )
+          )
+        ),
+
+        // Secondary YouTube connections
+        div(
+          cls("bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6"),
+          h2(
+            cls("text-xl font-semibold mb-4"),
+            "Secondary YouTube Connections"
+          ),
+          div(
+            cls("text-sm text-gray-500 dark:text-gray-400 mb-4"),
+            "Additional YouTube connections for querying latest videos. These are used for ad promotions during Twitch ad breaks."
+          ),
+          children <-- UserStore.youtubeConnections.signal.map { connections =>
+            if (connections.isEmpty) {
+              Seq(
+                div(
+                  cls("text-sm text-gray-400 dark:text-gray-500 italic py-2"),
+                  "No secondary connections configured"
+                )
+              )
+            } else {
+              connections.map { conn =>
+                div(
+                  cls("flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"),
+                  div(
+                    cls("text-sm font-medium text-gray-900 dark:text-white"),
+                    span("Channel: "),
+                    span(cls("text-gray-500 dark:text-gray-400"), conn.channelId)
+                  ),
+                  button(
+                    cls("text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"),
+                    onClick --> { (_: dom.Event) =>
+                      UserStore.revokeYoutubeConnection(conn.channelId)
+                    },
+                    children <-- Var("Revoke").signal.map { txt =>
+                      Seq(span(txt))
+                    }
+                  )
+                )
+              }
+            }
+          }
+        ),
+
+        // YouTube ad configuration
+        div(
+          cls("bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6"),
+          h2(
+            cls("text-xl font-semibold mb-4"),
+            "YouTube Ad Configuration"
+          ),
+          div(
+            cls("text-sm text-gray-500 dark:text-gray-400 mb-6"),
+            "Configure how ArchieMate promotes your YouTube videos during Twitch ad breaks. " +
+            "Ads are sent to active Twitch chats when an ad break starts."
+          ),
+          div(
+            cls("space-y-6"),
+            // Ad mode selection
+            div(
+              cls("space-y-2"),
+              label(
+                cls("block text-sm font-medium text-gray-700 dark:text-gray-300"),
+                "Ad Message Source"
+              ),
+              div(
+                cls("flex gap-4"),
+                label(
+                  cls("flex items-center gap-2 cursor-pointer"),
+                  input(
+                    cls("w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"),
+                    checked <-- UserStore.youtubeAdsConfig.signal.map(_.adMode == "title"),
+                    onChange --> { (e: dom.Event) =>
+                      val target = e.target.asInstanceOf[dom.HTMLInputElement]
+                      if (target.checked) {
+                        UserStore.saveYoutubeAdsConfig("title", UserStore.youtubeAdsConfig.now().adIntervalSeconds, UserStore.youtubeAdsConfig.now().adDescriptionParagraph)
+                      }
+                    }
+                  ),
+                  span(cls("text-sm text-gray-900 dark:text-white"), "Video Title")
+                ),
+                label(
+                  cls("flex items-center gap-2 cursor-pointer"),
+                  input(
+                    cls("w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"),
+                    checked <-- UserStore.youtubeAdsConfig.signal.map(_.adMode == "description"),
+                    onChange --> { (e: dom.Event) =>
+                      val target = e.target.asInstanceOf[dom.HTMLInputElement]
+                      if (target.checked) {
+                        UserStore.saveYoutubeAdsConfig("description", UserStore.youtubeAdsConfig.now().adIntervalSeconds, UserStore.youtubeAdsConfig.now().adDescriptionParagraph)
+                      }
+                    }
+                  ),
+                  span(cls("text-sm text-gray-900 dark:text-white"), "Description Paragraph")
+                )
+              )
+            ),
+            // Ad interval
+            div(
+              cls("space-y-2"),
+              label(
+                cls("block text-sm font-medium text-gray-700 dark:text-gray-300"),
+                "Minimum Interval Between Ads (seconds)"
+              ),
+              input(
+                cls("block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm px-3 py-2"),
+                value <-- UserStore.youtubeAdsConfig.signal.map(_.adIntervalSeconds.toString),
+                onChange --> { (e: dom.Event) =>
+                  val target = e.target.asInstanceOf[dom.HTMLInputElement]
+                  val interval = target.value.toIntOption.getOrElse(300)
+                  UserStore.saveYoutubeAdsConfig(UserStore.youtubeAdsConfig.now().adMode, interval, UserStore.youtubeAdsConfig.now().adDescriptionParagraph)
+                }
+              ),
+              p(cls("text-xs text-gray-500 dark:text-gray-400 mt-1"), "Minimum 60 seconds, maximum 3600 seconds")
+            ),
+            // Description paragraph (conditional)
+            children <-- UserStore.youtubeAdsConfig.signal.map { config =>
+              if (config.adMode == "description") {
+                Seq(
+                  div(
+                    cls("space-y-2"),
+                    label(
+                      cls("block text-sm font-medium text-gray-700 dark:text-gray-300"),
+                      "Description Paragraph Index (0-based)"
+                    ),
+                    input(
+                      cls("block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm px-3 py-2"),
+                      value <-- UserStore.youtubeAdsConfig.signal.map(_.adDescriptionParagraph.toString),
+                      onChange --> { (e: dom.Event) =>
+                        val target = e.target.asInstanceOf[dom.HTMLInputElement]
+                        val paragraph = target.value.toIntOption.getOrElse(0)
+                        UserStore.saveYoutubeAdsConfig(UserStore.youtubeAdsConfig.now().adMode, UserStore.youtubeAdsConfig.now().adIntervalSeconds, paragraph)
+                      }
+                    ),
+                    p(cls("text-xs text-gray-500 dark:text-gray-400 mt-1"), "Index of the paragraph to use from the video description (0 = first paragraph)")
+                  )
+                )
+              } else {
+                Seq()
+              }
+            }
+          )
+        ),
+
         // Info section
         div(
           cls("bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"),
@@ -330,12 +574,12 @@ object DashboardPage {
             ),
             div(
               cls("text-sm text-blue-700 dark:text-blue-300"),
-              p(cls("font-medium mb-1"), "About Twitch authorization"),
+              p(cls("font-medium mb-1"), "About platform connections"),
               p(
                 cls("mb-2"),
-                "ArchieMate uses Twitch OAuth to connect to your Twitch chat. " +
-                "Your access token is stored securely and used only for chat operations. " +
-                "Your email is never read or stored."
+                "ArchieMate connects to streaming platforms to manage your chat and stream. " +
+                "Your access tokens are stored securely and used only for platform operations. " +
+                "You can connect one primary YouTube channel and multiple secondary YouTube channels for video queries."
               )
             )
           )
