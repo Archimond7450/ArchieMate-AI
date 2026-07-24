@@ -47,13 +47,32 @@ class AuthRoutes(
             given ExecutionContext = scala.concurrent.ExecutionContext.global
 
             val redirectUri = buildRedirectUri()
+            // No scopes — only used to retrieve user info (never email)
             onComplete(twitchOAuthActor.ask[TwitchOAuthActor.StateGenerated](ref =>
-              TwitchOAuthActor.GenerateState(redirectUri, ref)
+              TwitchOAuthActor.GenerateState(redirectUri, ref, scopes = Nil)
             )) {
               case scala.util.Success(TwitchOAuthActor.StateOk(_, authUrl)) =>
                 redirect(authUrl.toString, StatusCodes.Found)
               case scala.util.Success(TwitchOAuthActor.StateError(msg)) =>
                 complete(StatusCodes.InternalServerError -> s"Failed to generate OAuth state: $msg")
+              case scala.util.Failure(ex) =>
+                complete(StatusCodes.InternalServerError -> s"OAuth state generation failed: ${ex.getMessage}")
+            }
+          }
+        } ~
+        // GET /auth/twitch/authorize — redirect to Twitch for chatbot authorization
+        path("authorize") {
+          get {
+            given Scheduler = classicActorSystem.toTyped.scheduler
+            given Timeout = Timeout(appConfig.askTimeout)
+            given ExecutionContext = scala.concurrent.ExecutionContext.global
+
+            val redirectUri = buildRedirectUri()
+            onComplete(twitchOAuthActor.ask[TwitchOAuthActor.AuthorizeStateGenerated](ref =>
+              TwitchOAuthActor.GenerateAuthorizeState(redirectUri, ref)
+            )) {
+              case scala.util.Success(TwitchOAuthActor.AuthorizeStateOk(_, authUrl)) =>
+                redirect(authUrl.toString, StatusCodes.Found)
               case scala.util.Failure(ex) =>
                 complete(StatusCodes.InternalServerError -> s"OAuth state generation failed: ${ex.getMessage}")
             }
@@ -75,7 +94,7 @@ class AuthRoutes(
                   onComplete(twitchOAuthActor.ask[TwitchOAuthActor.TokenExchangeResponse](ref =>
                     TwitchOAuthActor.ExchangeCode(state, ref)
                   )) {
-                    case scala.util.Success(TwitchOAuthActor.TokenExchangeSuccess(accessToken, refreshToken, expiresIn, platformUserId)) =>
+                    case scala.util.Success(TwitchOAuthActor.TokenExchangeSuccess(accessToken, refreshToken, expiresIn, platformUserId, flow)) =>
                       val expiresAt = Instant.now().plusSeconds(expiresIn)
                       onComplete(
                         userTokenRegistry.ask[UserTokenRegistry.RegisterResponse](ref =>
@@ -91,30 +110,38 @@ class AuthRoutes(
                       ) { tokenResult =>
                         tokenResult match {
                           case scala.util.Success(UserTokenRegistry.Registered(_)) =>
-                            // Issue a JWT for this user
-                            onComplete(
-                              jwtActor.ask[JwtActor.EncodeResponse](ref =>
-                                JwtActor.Encode(platformUserId, ref)
-                              )
-                            ) { jwtResult =>
-                              jwtResult match {
-                                case scala.util.Success(JwtActor.EncodeSuccess(jwtToken)) =>
-                                  // Set HTTP-only cookie and redirect to dashboard
-                                  val cookie = org.apache.pekko.http.scaladsl.model.headers.HttpCookie(
-                                    "archiemate_jwt",
-                                    jwtToken,
-                                    httpOnly = true,
-                                    secure = isSecure,
-                                    maxAge = Some(appConfig.jwt.tokenLifetimeMinutes.toLong * 60)
+                            flow match {
+                              case "login" =>
+                                // Issue a JWT for this user
+                                onComplete(
+                                  jwtActor.ask[JwtActor.EncodeResponse](ref =>
+                                    JwtActor.Encode(platformUserId, ref)
                                   )
-                                  setCookie(cookie) {
-                                    redirect(callbackPath, StatusCodes.Found)
+                                ) { jwtResult =>
+                                  jwtResult match {
+                                    case scala.util.Success(JwtActor.EncodeSuccess(jwtToken)) =>
+                                      // Set HTTP-only cookie and redirect to dashboard
+                                      val cookie = org.apache.pekko.http.scaladsl.model.headers.HttpCookie(
+                                        "archiemate_jwt",
+                                        jwtToken,
+                                        httpOnly = true,
+                                        secure = isSecure,
+                                        maxAge = Some(appConfig.jwt.tokenLifetimeMinutes.toLong * 60)
+                                      )
+                                      setCookie(cookie) {
+                                        redirect(callbackPath, StatusCodes.Found)
+                                      }
+                                    case scala.util.Success(JwtActor.Error(msg)) =>
+                                      redirect(s"$callbackPath?error=jwt_failed", StatusCodes.Found)
+                                    case scala.util.Failure(ex) =>
+                                      redirect(s"$callbackPath?error=jwt_failed", StatusCodes.Found)
                                   }
-                                case scala.util.Success(JwtActor.Error(msg)) =>
-                                  redirect(s"$callbackPath?error=jwt_failed", StatusCodes.Found)
-                                case scala.util.Failure(ex) =>
-                                  redirect(s"$callbackPath?error=jwt_failed", StatusCodes.Found)
-                              }
+                                }
+                              case "authorize" =>
+                                // Tokens updated — don't change the JWT, just redirect
+                                redirect("/dashboard", StatusCodes.Found)
+                              case _ =>
+                                redirect(callbackPath, StatusCodes.Found)
                             }
                           case scala.util.Success(UserTokenRegistry.Error(msg)) =>
                             redirect(s"$callbackPath?error=token_store_failed", StatusCodes.Found)

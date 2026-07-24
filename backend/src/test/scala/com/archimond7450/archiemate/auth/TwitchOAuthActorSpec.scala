@@ -130,7 +130,7 @@ class TwitchOAuthActorSpec
       val probe = testKit.createTestProbe[TwitchOAuthActor.StateGenerated]()
       val redirectUri = "http://localhost:8080/auth/twitch/callback"
 
-      actor ! TwitchOAuthActor.GenerateState(redirectUri, probe.ref)
+      actor ! TwitchOAuthActor.GenerateState(redirectUri, probe.ref, scopes = List("chat:read", "chat:edit"))
 
       probe.receiveMessage() match {
         case TwitchOAuthActor.StateOk(state, authUrl) =>
@@ -143,6 +143,32 @@ class TwitchOAuthActorSpec
           authUrl.query().toMap.get("state") should contain(state)
         case TwitchOAuthActor.StateError(msg) =>
           fail(s"Expected StateOk but got StateError: $msg")
+      }
+    }
+
+    "generate an authorization URL with configured scopes and force_verify" in {
+      val httpClient = spawnHttpClient()
+      val httpRequestActor = spawnHttpRequestActor(httpClient)
+      val mediator = spawnMediator(httpClient, httpRequestActor)
+      val actor = spawnTwitchOAuthActor(mediator)
+
+      val probe = testKit.createTestProbe[TwitchOAuthActor.AuthorizeStateGenerated]()
+      val redirectUri = "http://localhost:8080/auth/twitch/callback"
+
+      actor ! TwitchOAuthActor.GenerateAuthorizeState(redirectUri, probe.ref)
+
+      probe.receiveMessage() match {
+        case TwitchOAuthActor.AuthorizeStateOk(state, authUrl) =>
+          state should not be empty
+          authUrl.toString should startWith("https://id.twitch.tv/oauth2/authorize")
+          authUrl.query().toMap.get("client_id") should contain("test-client-id")
+          authUrl.query().toMap.get("redirect_uri") should contain(redirectUri)
+          authUrl.query().toMap.get("response_type") should contain("code")
+          authUrl.query().toMap.get("scope") should contain("chat:read,chat:edit")
+          authUrl.query().toMap.get("force_verify") should contain("true")
+          authUrl.query().toMap.get("state") should contain(state)
+        case other =>
+          fail(s"Expected AuthorizeStateOk but got: $other")
       }
     }
 
@@ -170,11 +196,12 @@ class TwitchOAuthActorSpec
       actor ! TwitchOAuthActor.ExchangeCode(state, exchangeProbe.ref)
 
       exchangeProbe.receiveMessage() match {
-        case TwitchOAuthActor.TokenExchangeSuccess(accessToken, refreshToken, expiresIn, platformUserId) =>
+        case TwitchOAuthActor.TokenExchangeSuccess(accessToken, refreshToken, expiresIn, platformUserId, flow) =>
           accessToken should not be empty
           refreshToken should not be empty
           expiresIn shouldBe 3600
           platformUserId shouldBe "test-user-id-123"
+          flow shouldBe "login"
         case TwitchOAuthActor.TokenExchangeError(msg) =>
           fail(s"Expected TokenExchangeSuccess but got TokenExchangeError: $msg")
       }

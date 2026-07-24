@@ -43,10 +43,15 @@ object TwitchOAuthActor {
 
   sealed trait Command
 
-  /** Generate an OAuth state and return the Twitch authorization URL. */
+  /** Generate an OAuth state and return the Twitch authorization URL.
+    *
+    * @param scopes
+    *   scopes to request (empty = no scopes, for login-only user info)
+    */
   final case class GenerateState(
       redirectUri: String,
-      replyTo: ActorRef[StateGenerated]
+      replyTo: ActorRef[StateGenerated],
+      scopes: List[String] = Nil
   ) extends Command
 
   /** Exchange an authorization code for Twitch tokens. */
@@ -63,12 +68,23 @@ object TwitchOAuthActor {
   final case class StateOk(state: String, authUrl: Uri) extends StateGenerated
   final case class StateError(message: String) extends StateGenerated
 
+  /** Generate an OAuth state and return the Twitch authorization URL with
+    * configured scopes and force_verify=true (for re-authorization). */
+  final case class GenerateAuthorizeState(
+      redirectUri: String,
+      replyTo: ActorRef[AuthorizeStateGenerated]
+  ) extends Command
+
+  sealed trait AuthorizeStateGenerated
+  final case class AuthorizeStateOk(state: String, authUrl: Uri) extends AuthorizeStateGenerated
+
   sealed trait TokenExchangeResponse
   final case class TokenExchangeSuccess(
       accessToken: String,
       refreshToken: String,
       expiresIn: Long,
-      platformUserId: String
+      platformUserId: String,
+      flow: String
   ) extends TokenExchangeResponse
   final case class TokenExchangeError(message: String) extends TokenExchangeResponse
 
@@ -78,7 +94,8 @@ object TwitchOAuthActor {
 
   private case class OAuthState(
       redirectUri: String,
-      expiresAt: Instant
+      expiresAt: Instant,
+      flow: String
   )
 
   private case class State(store: Map[String, OAuthState])
@@ -162,12 +179,20 @@ object TwitchOAuthActor {
       Map("actor" -> actorName)
     }(
       Behaviors.receiveMessage {
-        case GenerateState(redirectUri, replyTo) =>
+        case GenerateState(redirectUri, replyTo, scopes) =>
           val oauthState = UUID.randomUUID().toString
           val expiresAt = Instant.now().plusSeconds(300) // 5 min TTL
-          val newState = state.copy(store = state.store + (oauthState -> OAuthState(redirectUri, expiresAt)))
-          val authUrl = buildAuthUrl(config, oauthState, redirectUri)
+          val newState = state.copy(store = state.store + (oauthState -> OAuthState(redirectUri, expiresAt, "login")))
+          val authUrl = buildAuthUrl(config, oauthState, redirectUri, scopes)
           replyTo ! StateOk(oauthState, authUrl)
+          mainBehavior(newState, config, mediator, authBaseUrl, helixBaseUrl)
+
+        case GenerateAuthorizeState(redirectUri, replyTo) =>
+          val oauthState = UUID.randomUUID().toString
+          val expiresAt = Instant.now().plusSeconds(300) // 5 min TTL
+          val newState = state.copy(store = state.store + (oauthState -> OAuthState(redirectUri, expiresAt, "authorize")))
+          val authUrl = buildAuthUrl(config, oauthState, redirectUri, config.scopes, forceVerify = true)
+          replyTo ! AuthorizeStateOk(oauthState, authUrl)
           mainBehavior(newState, config, mediator, authBaseUrl, helixBaseUrl)
 
         case ExchangeCode(code, replyTo) =>
@@ -181,7 +206,7 @@ object TwitchOAuthActor {
             case Some(oauthState) =>
               // Valid state — remove it (one-time use) and exchange the code
               val newState = state.copy(store = state.store - code)
-              exchangeCode(config, oauthState.redirectUri, code, mediator, replyTo, authBaseUrl, helixBaseUrl)
+              exchangeCode(config, oauthState.redirectUri, code, mediator, replyTo, authBaseUrl, helixBaseUrl, oauthState.flow)
               mainBehavior(newState, config, mediator, authBaseUrl, helixBaseUrl)
           }
       }
@@ -194,17 +219,27 @@ object TwitchOAuthActor {
   private def buildAuthUrl(
       config: TwitchConfig,
       state: String,
-      redirectUri: String
+      redirectUri: String,
+      scopes: List[String] = Nil,
+      forceVerify: Boolean = false
   ): Uri = {
-    val scopes = config.scopes.mkString(",")
-    val query = Query(
+    val baseParams = Seq(
       "client_id" -> config.clientId,
       "redirect_uri" -> redirectUri,
       "response_type" -> "code",
-      "scope" -> scopes,
       "state" -> state
     )
-    Uri("https://id.twitch.tv/oauth2/authorize").withQuery(query)
+    val paramsWithScope = if (scopes.nonEmpty) {
+      baseParams :+ ("scope" -> scopes.mkString(","))
+    } else {
+      baseParams
+    }
+    val finalParams = if (forceVerify) {
+      paramsWithScope :+ ("force_verify" -> "true")
+    } else {
+      paramsWithScope
+    }
+    Uri("https://id.twitch.tv/oauth2/authorize").withQuery(Query(finalParams*))
   }
 
   private def exchangeCode(
@@ -214,7 +249,8 @@ object TwitchOAuthActor {
       mediator: ActorRef[ArchieMateMediator.Command],
       replyTo: ActorRef[TokenExchangeResponse],
       authBaseUrl: String,
-      helixBaseUrl: String
+      helixBaseUrl: String,
+      flow: String
   )(using ctx: ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
     // Build form-encoded body for token exchange
     val body = Seq(
@@ -245,7 +281,7 @@ object TwitchOAuthActor {
       case scala.util.Success(resp) =>
         resp match {
           case StatusReply.Success(tokenResp: TwitchTokenResponse) =>
-            parseTokenResponse(tokenResp, config.clientId, replyTo, mediator, helixBaseUrl)
+            parseTokenResponse(tokenResp, config.clientId, replyTo, mediator, helixBaseUrl, flow)
           case StatusReply.Error(err) =>
             replyTo ! TokenExchangeError(s"Token exchange failed: ${err.getMessage}")
         }
@@ -259,10 +295,11 @@ object TwitchOAuthActor {
       clientId: String,
       replyTo: ActorRef[TokenExchangeResponse],
       mediator: ActorRef[ArchieMateMediator.Command],
-      helixBaseUrl: String
+      helixBaseUrl: String,
+      flow: String
   )(using ctx: ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
     // Fetch user info with the access token
-    fetchTwitchUser(tokenResp, clientId, replyTo, mediator, helixBaseUrl)
+    fetchTwitchUser(tokenResp, clientId, replyTo, mediator, helixBaseUrl, flow)
   }
 
   private def fetchTwitchUser(
@@ -270,7 +307,8 @@ object TwitchOAuthActor {
       clientId: String,
       replyTo: ActorRef[TokenExchangeResponse],
       mediator: ActorRef[ArchieMateMediator.Command],
-      helixBaseUrl: String
+      helixBaseUrl: String,
+      flow: String
   )(using ctx: ActorContext[Command], scheduler: Scheduler, timeout: Timeout, execEc: ExecutionContext): Unit = {
     val future: Future[StatusReply[TwitchHelixUserList]] = mediator ? { ref =>
       ArchieMateMediator.SendHttpRequest(
@@ -298,7 +336,8 @@ object TwitchOAuthActor {
                 accessToken = tokenResp.accessToken,
                 refreshToken = tokenResp.refreshToken,
                 expiresIn = tokenResp.expiresIn,
-                platformUserId = user.id
+                platformUserId = user.id,
+                flow = flow
               )
             } else {
               replyTo ! TokenExchangeError("No user data returned from Twitch")

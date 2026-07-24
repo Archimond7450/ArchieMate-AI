@@ -66,11 +66,14 @@ cd .. && docker compose -f docker-compose.e2e.yml down --remove-orphans
 ## Version Info
 Footer auto-generates version/built-at from build.sbt via `VersionInfo` object.
 
-## Pekko Typed Actors
-See [pekko-typed-actors-best-practices.md](docs/pekko-typed-actors-best-practices.md) for conventions on writing Pekko Typed actors (object vs class pattern, state management, supervision, etc.).
+## General Best Practices
+See [general-best-practices.md](docs/general-best-practices.md) for Scala 3 syntax, given/using, extension methods, implicit conversions, circe derived encoders/decoders, and import conventions.
 
-## Scala Best Practices
-See [scala-best-practices.md](docs/scala-best-practices.md) for conventions on Scala 3 syntax, given/using, extension methods, implicit conversions, and circe JSON encoding/decoding.
+## Backend Best Practices
+See [backend-best-practices.md](docs/backend-best-practices.md) for conventions on Pekko Typed actors (command/response patterns, supervision, state management, logging), actor testing, ClassicActorSystemProvider, HTTP endpoint patterns, and non-actor logging.
+
+## Frontend Best Practices
+See [frontend-best-practices.md](docs/frontend-best-practices.md) for conventions on Laminar reactivity (children vs child vs text), SVG, DOM access, fetch API, component structure, Tailwind CSS, and testing.
 
 ## Compiler Warnings
 **Always solve all compiler warnings — never leave them unaddressed.** The most common and important ones:

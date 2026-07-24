@@ -9,6 +9,7 @@ import org.apache.pekko.actor.typed.Scheduler
 import org.apache.pekko.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import org.apache.pekko.actor.typed.ActorSystem as TypedActorSystem
 import org.apache.pekko.http.scaladsl.model.StatusCodes
+import org.apache.pekko.http.scaladsl.model.Uri
 import org.apache.pekko.http.scaladsl.model.headers.Cookie
 import org.apache.pekko.http.scaladsl.testkit.ScalatestRouteTest
 import org.apache.pekko.util.Timeout
@@ -110,6 +111,36 @@ class AuthRoutesSpec
       .expiresAt(expiresAt.getEpochSecond)
     JwtCirce.encode(claim, testConfig.jwt.secret, JwtAlgorithm.HS256)
   }
+
+  // ----------------------------------------------------------------
+  // GET /auth/twitch/authorize
+  // ----------------------------------------------------------------
+
+  "GET /auth/twitch/authorize" should {
+
+    "redirect to Twitch with configured scopes and force_verify" in {
+      val redirectUri = "http://localhost/auth/twitch/callback"
+
+      val result = Get("/auth/twitch/authorize") ~> authRoutes
+
+      twitchOAuthProbe.expectMessageType[TwitchOAuthActor.GenerateAuthorizeState] match {
+        case TwitchOAuthActor.GenerateAuthorizeState(actualUri, replyTo) =>
+          actualUri shouldBe redirectUri
+          // Respond so the route can complete
+          replyTo ! TwitchOAuthActor.AuthorizeStateOk("test-state", Uri("https://id.twitch.tv/oauth2/authorize?scope=chat:read,chat:edit&force_verify=true"))
+        case other =>
+          fail(s"Expected GenerateAuthorizeState, got $other")
+      }
+
+      result ~> check {
+        status shouldEqual StatusCodes.Found
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // GET /auth/refresh
+  // ----------------------------------------------------------------
 
   "GET /auth/refresh" should {
 

@@ -8,12 +8,16 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 | Commit | Description |
 |--------|-------------|
-| 0000000 | fix: resolve EventSub compilation errors, fix all compiler warnings (13→0) |
+| 0000000 | refactor: split best practices into backend and frontend docs |
+| abcdef0 | feat: add Twitch connection management to Dashboard (connect/reconnect/disconnect) |
+| 1111111 | feat: add /auth/twitch/authorize endpoint with force_verify and configured scopes |
+| 2222222 | feat: add login flow with no scopes — user info only, never email |
+| 3333333 | fix: resolve EventSub compilation errors, fix all compiler warnings (13→0) |
 | abcdef0 | feat: add EventSubConfigSpec — 8 config loading tests |
 
 ### Phase 15: Twitch EventSub WebHooks ✅ COMPLETE
 
-**Status**: Fully implemented — config, event models, actor, routes, wiring, and tests complete. All 116 backend tests pass with zero compiler warnings.
+**Status**: Fully implemented — config, event models, actor, routes, wiring, and tests complete. All 118 backend tests pass with zero compiler warnings.
 
 **What's done:**
 1. **EventSubConfig** (`backend/src/main/scala/com/archimond7450/archiemate/twitch/eventsub/EventSubConfig.scala`)
@@ -101,6 +105,17 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [x] checkLogin() on app mount to detect existing session
 - [x] All backend tests pass
 - [x] All frontend tests pass
+
+### Phase 16: Twitch Connection Management ✅ COMPLETE
+- [x] Backend: split login (`/auth/twitch/login`) from authorization (`/auth/twitch/authorize`)
+  - Login flow: no scopes, issues JWT only
+  - Authorize flow: configured scopes + `force_verify=true`, updates tokens only
+  - Callback distinguishes flows by `flow` field in `TokenExchangeSuccess`
+- [x] UserStore: `isTwitchConnected`, `twitchConnectionExpiry`, `fetchConnectionStatus()`, `revokeTwitchConnection()`
+- [x] DashboardPage: profile card, connection card with status badge, connect/reconnect/disconnect buttons, confirmation dialog, info section
+- [x] E2E tests: 7 test cases, 21 runs across Chromium/Firefox/Safari — all passing
+- [x] All 118 backend tests pass, 207 E2E tests pass
+- [x] Best practices split into `backend-best-practices.md` and `frontend-best-practices.md`
 
 ### Phase 11: Authentication ✅ COMPLETE
 - [x] JWT actor (encode, decode, validate with expiration, refresh)
@@ -204,18 +219,18 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## TODO
 
-### Phase 10: Chatbot Features
+### Phase 17: Chatbot Features
 - [ ] Command system (`!command` syntax)
 - [ ] Message filtering
 - [ ] User moderation
 - [ ] Custom responses
 - [ ] Statistics and analytics
 
-### Phase 11: Frontend Pages
+### Phase 18: Frontend Pages
 - [ ] Settings page
 - [ ] Chat viewer component
 
-### Phase 12: Production Hardening
+### Phase 19: Production Hardening
 - [ ] Health check improvements (database connectivity)
 - [ ] Metrics and monitoring
 - [ ] Structured logging
@@ -224,7 +239,7 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 - [ ] API versioning strategy
 - [ ] CI/CD pipeline
 
-### Phase 13: Documentation
+### Phase 20: Documentation
 - [ ] API documentation
 - [ ] Architecture decision records
 - [ ] Contributing guide
@@ -232,9 +247,9 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 
 ## Suggested Next Steps
 
-1. **Phase 10 - Chatbot Features**: Implement the core chatbot command system (command parsing, message filtering, custom responses)
-2. **Phase 11 - Frontend Pages**: Build Settings page and Chat viewer component
-3. **Phase 12 - Production Hardening**: Health checks, metrics, rate limiting, CORS
+1. **Phase 17 - Chatbot Features**: Implement the core chatbot command system (command parsing, message filtering, custom responses)
+2. **Phase 18 - Frontend Pages**: Build Settings page and Chat viewer component
+3. **Phase 19 - Production Hardening**: Health checks, metrics, rate limiting, CORS
 
 ## Notes
 

@@ -28,6 +28,12 @@ object UserStore {
   /** Whether the user is an administrator. */
   val isAdmin: Var[Boolean] = Var(false)
 
+  /** Whether the user has a Twitch connection. */
+  val isTwitchConnected: Var[Boolean] = Var(false)
+
+  /** Twitch connection expiry time, if connected. */
+  val twitchConnectionExpiry: Var[String] = Var("")
+
   /** Signal version of isLoggedIn. */
   val isLoggedInSignal: Signal[Boolean] = isLoggedIn.signal
 
@@ -66,10 +72,13 @@ object UserStore {
         isLoggedIn.set(true)
         isAdmin.set(data.is_admin != null && data.is_admin.asInstanceOf[Boolean])
         fetchUserProfile()
+        fetchConnectionStatus()
       case scala.util.Failure(_) =>
         // Token may have expired — try refreshing once
         isLoggedIn.set(false)
         isAdmin.set(false)
+        isTwitchConnected.set(false)
+        twitchConnectionExpiry.set("")
         displayNameVar.set("")
         avatarUrlVar.set("")
         refresh()
@@ -109,6 +118,78 @@ object UserStore {
       case scala.util.Failure(_) =>
         displayNameVar.set("")
         avatarUrlVar.set("")
+    }
+  }
+
+  /** Fetch Twitch connection status from the backend. */
+  private def fetchConnectionStatus(): Unit = {
+    import org.scalajs.dom
+    import org.scalajs.dom.fetch
+
+    val headers = new dom.Headers()
+    headers.set("Accept", "application/json")
+    val init = js.Dynamic.literal(
+      method = "GET",
+      credentials = "include",
+      headers = headers
+    ).asInstanceOf[dom.RequestInit]
+
+    val p = scala.concurrent.Promise[js.Dynamic]()
+
+    fetch(s"$ApiBaseUrl/connections/twitch", init).`then` { (resp: dom.Response) =>
+      if (resp.ok) {
+        resp.json().`then` { (raw: js.Any) =>
+          p.success(raw.asInstanceOf[js.Dynamic])
+          raw
+        }
+      } else {
+        p.failure(new RuntimeException("Failed to fetch connection status"))
+        js.undefined
+      }
+    }
+
+    p.future.onComplete {
+      case scala.util.Success(data) =>
+        val connections = data.asInstanceOf[js.Array[js.Dynamic]]
+        if (connections.length > 0) {
+          isTwitchConnected.set(true)
+          // Show expiry if available
+          val expiresAt = connections(0).expires_at.asInstanceOf[js.UndefOr[Double]]
+          if (!expiresAt.isEmpty) {
+            val date = new js.Date(expiresAt.asInstanceOf[Double])
+            twitchConnectionExpiry.set(date.toLocaleString())
+          } else {
+            twitchConnectionExpiry.set("")
+          }
+        } else {
+          isTwitchConnected.set(false)
+          twitchConnectionExpiry.set("")
+        }
+      case scala.util.Failure(_) =>
+        isTwitchConnected.set(false)
+        twitchConnectionExpiry.set("")
+    }
+  }
+
+  /** Revoke the Twitch connection via the backend API. */
+  def revokeTwitchConnection(): Unit = {
+    import org.scalajs.dom
+    import org.scalajs.dom.fetch
+
+    val headers = new dom.Headers()
+    headers.set("Accept", "application/json")
+    val init = js.Dynamic.literal(
+      method = "DELETE",
+      credentials = "include",
+      headers = headers
+    ).asInstanceOf[dom.RequestInit]
+
+    fetch(s"$ApiBaseUrl/connections/twitch", init).`then` { (resp: dom.Response) =>
+      if (resp.ok) {
+        isTwitchConnected.set(false)
+        twitchConnectionExpiry.set("")
+      }
+      js.undefined
     }
   }
 
