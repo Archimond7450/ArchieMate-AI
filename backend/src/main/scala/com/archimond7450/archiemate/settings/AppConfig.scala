@@ -44,7 +44,8 @@ object TwitchIrcConfig {
 case class KickConfig(
     clientId: String,
     clientSecret: String,
-    callbackPath: String
+    callbackPath: String,
+    scopes: List[String]
 )
 
 case class YoutubeConfig(
@@ -133,7 +134,8 @@ object AppConfig {
         KickConfig(
           clientId = resolveString(kickConf, "client-id", ""),
           clientSecret = resolveString(kickConf, "client-secret", ""),
-          callbackPath = resolveString(kickConf, "callback-path", "")
+          callbackPath = resolveString(kickConf, "callback-path", ""),
+          scopes = resolveScopes(kickConf, "scopes", List.empty)
         )
       },
       youtube = {

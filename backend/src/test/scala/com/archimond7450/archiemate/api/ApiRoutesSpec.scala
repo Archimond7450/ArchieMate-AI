@@ -49,7 +49,8 @@ class ApiRoutesSpec
     kick = KickConfig(
       clientId = "",
       clientSecret = "",
-      callbackPath = ""
+      callbackPath = "",
+      scopes = List.empty
     ),
     youtube = YoutubeConfig(
       clientId = "",

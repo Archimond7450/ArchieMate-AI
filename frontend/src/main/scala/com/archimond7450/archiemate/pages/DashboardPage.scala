@@ -209,6 +209,107 @@ object DashboardPage {
           )
         ),
 
+        // Kick connection card
+        div(
+          cls("bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6"),
+          div(
+            cls("flex items-center justify-between mb-4"),
+            h2(
+              cls("text-xl font-semibold"),
+              "Kick Connection"
+            ),
+            children <-- UserStore.isKickConnected.signal.map { connected =>
+              Seq(statusBadge(connected))
+            }
+          ),
+          div(
+            cls("space-y-4"),
+            // Connection details
+            div(
+              cls("grid grid-cols-1 sm:grid-cols-2 gap-4"),
+              div(
+                cls("text-sm text-gray-500 dark:text-gray-400"),
+                "Status"
+              ),
+              div(
+                cls("text-sm font-medium text-gray-900 dark:text-white"),
+                children <-- UserStore.isKickConnected.signal.map { connected =>
+                  if (connected) Seq(span("Connected")) else Seq(span("Not connected"))
+                }
+              ),
+              div(
+                cls("text-sm text-gray-500 dark:text-gray-400"),
+                "Token expires"
+              ),
+              div(
+                cls("text-sm font-medium text-gray-900 dark:text-white"),
+                children <-- UserStore.kickConnectionExpiry.signal.map { expiry =>
+                  Seq(span(formatDate(expiry)))
+                }
+              )
+            ),
+            // Divider
+            div(cls("border-t border-gray-200 dark:border-gray-700")),
+            // Actions
+            div(
+              cls("flex flex-wrap gap-3"),
+              children <-- UserStore.isKickConnected.signal.map { connected =>
+                if (!connected) {
+                  Seq(
+                    actionButton(
+                      "Connect Kick",
+                      handler = { _ =>
+                        dom.window.location.href = "/auth/kick/authorize"
+                      },
+                      disabled = false,
+                      variant = "primary"
+                    )
+                  )
+                } else if (confirmDisconnect.now()) {
+                  Seq(
+                    actionButton(
+                      "Confirm disconnect",
+                      handler = { _ =>
+                        UserStore.revokeKickConnection()
+                        confirmDisconnect.set(false)
+                      },
+                      disabled = false,
+                      variant = "danger"
+                    ),
+                    actionButton(
+                      "Cancel",
+                      handler = { _ =>
+                        confirmDisconnect.set(false)
+                      },
+                      disabled = false,
+                      variant = "outline"
+                    )
+                  )
+                } else {
+                  Seq(
+                    actionButton(
+                      "Reconnect",
+                      handler = { _ =>
+                        dom.window.location.href = "/auth/kick/authorize"
+                      },
+                      disabled = false,
+                      variant = "primary"
+                    ),
+                    actionButton(
+                      "Disconnect",
+                      handler = { _ =>
+                        confirmDisconnect.set(true)
+                      },
+                      disabled = false,
+                      variant = "danger"
+                    )
+                  )
+                }
+              }
+            )
+          )
+        ),
+
         // Info section
         div(
           cls("bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"),

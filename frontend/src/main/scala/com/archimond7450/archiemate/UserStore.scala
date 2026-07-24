@@ -34,6 +34,12 @@ object UserStore {
   /** Twitch connection expiry time, if connected. */
   val twitchConnectionExpiry: Var[String] = Var("")
 
+  /** Whether the user has a Kick connection. */
+  val isKickConnected: Var[Boolean] = Var(false)
+
+  /** Kick connection expiry time, if connected. */
+  val kickConnectionExpiry: Var[String] = Var("")
+
   /** Signal version of isLoggedIn. */
   val isLoggedInSignal: Signal[Boolean] = isLoggedIn.signal
 
@@ -73,12 +79,15 @@ object UserStore {
         isAdmin.set(data.is_admin != null && data.is_admin.asInstanceOf[Boolean])
         fetchUserProfile()
         fetchConnectionStatus()
+        fetchKickConnectionStatus()
       case scala.util.Failure(_) =>
         // Token may have expired — try refreshing once
         isLoggedIn.set(false)
         isAdmin.set(false)
         isTwitchConnected.set(false)
         twitchConnectionExpiry.set("")
+        isKickConnected.set(false)
+        kickConnectionExpiry.set("")
         displayNameVar.set("")
         avatarUrlVar.set("")
         refresh()
@@ -188,6 +197,77 @@ object UserStore {
       if (resp.ok) {
         isTwitchConnected.set(false)
         twitchConnectionExpiry.set("")
+      }
+      js.undefined
+    }
+  }
+
+  /** Fetch Kick connection status from the backend. */
+  private def fetchKickConnectionStatus(): Unit = {
+    import org.scalajs.dom
+    import org.scalajs.dom.fetch
+
+    val headers = new dom.Headers()
+    headers.set("Accept", "application/json")
+    val init = js.Dynamic.literal(
+      method = "GET",
+      credentials = "include",
+      headers = headers
+    ).asInstanceOf[dom.RequestInit]
+
+    val p = scala.concurrent.Promise[js.Dynamic]()
+
+    fetch(s"$ApiBaseUrl/connections/kick", init).`then` { (resp: dom.Response) =>
+      if (resp.ok) {
+        resp.json().`then` { (raw: js.Any) =>
+          p.success(raw.asInstanceOf[js.Dynamic])
+          raw
+        }
+      } else {
+        p.failure(new RuntimeException("Failed to fetch Kick connection status"))
+        js.undefined
+      }
+    }
+
+    p.future.onComplete {
+      case scala.util.Success(data) =>
+        val connections = data.asInstanceOf[js.Array[js.Dynamic]]
+        if (connections.length > 0) {
+          isKickConnected.set(true)
+          val expiresAt = connections(0).expires_at.asInstanceOf[js.UndefOr[Double]]
+          if (!expiresAt.isEmpty) {
+            val date = new js.Date(expiresAt.asInstanceOf[Double])
+            kickConnectionExpiry.set(date.toLocaleString())
+          } else {
+            kickConnectionExpiry.set("")
+          }
+        } else {
+          isKickConnected.set(false)
+          kickConnectionExpiry.set("")
+        }
+      case scala.util.Failure(_) =>
+        isKickConnected.set(false)
+        kickConnectionExpiry.set("")
+    }
+  }
+
+  /** Revoke the Kick connection via the backend API. */
+  def revokeKickConnection(): Unit = {
+    import org.scalajs.dom
+    import org.scalajs.dom.fetch
+
+    val headers = new dom.Headers()
+    headers.set("Accept", "application/json")
+    val init = js.Dynamic.literal(
+      method = "DELETE",
+      credentials = "include",
+      headers = headers
+    ).asInstanceOf[dom.RequestInit]
+
+    fetch(s"$ApiBaseUrl/connections/kick", init).`then` { (resp: dom.Response) =>
+      if (resp.ok) {
+        isKickConnected.set(false)
+        kickConnectionExpiry.set("")
       }
       js.undefined
     }

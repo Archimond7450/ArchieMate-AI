@@ -51,7 +51,8 @@ class KickApiActorSpec
   private val kickConfig: KickConfig = KickConfig(
     clientId = "test-kick-client-id",
     clientSecret = "test-kick-client-secret",
-    callbackPath = "/auth/kick/callback"
+    callbackPath = "/auth/kick/callback",
+    scopes = List("channels.read", "offline_access")
   )
 
   private def spawnHttpClient(): ActorRef[HttpClientActor.Command] = {

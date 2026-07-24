@@ -45,7 +45,8 @@ class AuthRoutesSpec
     kick = KickConfig(
       clientId = "",
       clientSecret = "",
-      callbackPath = ""
+      callbackPath = "",
+      scopes = List.empty
     ),
     youtube = YoutubeConfig(
       clientId = "",
@@ -86,6 +87,10 @@ class AuthRoutesSpec
     TestProbe[TwitchOAuthActor.Command]("twitch-oauth")
   private val twitchOAuthActor = twitchOAuthProbe.ref
 
+  private val kickOAuthProbe: TestProbe[KickOAuthActor.Command] =
+    TestProbe[KickOAuthActor.Command]("kick-oauth")
+  private val kickOAuthActor = kickOAuthProbe.ref
+
   private val userTokenRegistryProbe: TestProbe[UserTokenRegistry.Command] =
     TestProbe[UserTokenRegistry.Command]("user-token-registry")
   private val userTokenRegistry = userTokenRegistryProbe.ref
@@ -97,6 +102,7 @@ class AuthRoutesSpec
   private val authRoutes = new AuthRoutes(
     testConfig,
     twitchOAuthActor,
+    kickOAuthActor,
     userTokenRegistry,
     jwtActor,
     classicSystem

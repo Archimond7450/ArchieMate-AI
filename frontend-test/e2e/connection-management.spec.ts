@@ -72,4 +72,21 @@ test.describe('Connection Management', () => {
     const profileImage = page.locator('img[alt="Profile"]');
     await expect(profileImage).toBeVisible();
   });
+
+  test('dashboard shows Kick connection section', async ({ page }) => {
+    await page.goto('/dashboard');
+    
+    // The Kick Connection heading should be visible
+    const kickConnectionHeader = page.locator('h2', { hasText: 'Kick Connection' });
+    await expect(kickConnectionHeader).toBeVisible();
+  });
+
+  test('dashboard shows connect button for Kick when not connected', async ({ page }) => {
+    await page.goto('/dashboard');
+    
+    // Connect Kick button should be visible when no connection exists
+    const connectButton = page.getByRole('button', { name: 'Connect Kick' });
+    await expect(connectButton).toBeVisible();
+    await expect(connectButton).toBeEnabled();
+  });
 });

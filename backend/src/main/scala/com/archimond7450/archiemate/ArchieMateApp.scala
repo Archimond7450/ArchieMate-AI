@@ -11,6 +11,7 @@ import org.apache.pekko.http.scaladsl.server.Directives._enhanceRouteWithConcate
 import com.archimond7450.archiemate.api.ApiRoutes
 import com.archimond7450.archiemate.auth.AuthRoutes
 import com.archimond7450.archiemate.auth.JwtActor
+import com.archimond7450.archiemate.auth.KickOAuthActor
 import com.archimond7450.archiemate.auth.TwitchOAuthActor
 import com.archimond7450.archiemate.actors.http.HttpRequestActor
 import com.archimond7450.archiemate.http.HttpClientActor
@@ -82,6 +83,10 @@ object ArchieMateApp {
         UserTokenRegistry(),
         "user-token-registry"
       )
+      val kickOAuthActor = innerCtx.spawn(
+        KickOAuthActor(appConfig.kick, httpRequestActor, userTokenRegistry),
+        "kick-oauth-actor"
+      )
       val twitchApiActor = innerCtx.spawn(
         Behaviors.supervise(TwitchApiActor(appConfig.twitch, httpRequestActor, userTokenRegistry)).onFailure[Throwable](SupervisorStrategy.resume),
         "twitch-api-actor"
@@ -112,6 +117,7 @@ object ArchieMateApp {
           val authRoutes = new AuthRoutes(
             appConfig,
             twitchOAuthActor,
+            kickOAuthActor,
             userTokenRegistry,
             jwtActor,
             classicSystem.classicSystem

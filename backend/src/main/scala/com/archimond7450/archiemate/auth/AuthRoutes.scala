@@ -9,7 +9,7 @@ import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.util.Timeout
-import com.archimond7450.archiemate.settings.{AppConfig, TwitchConfig}
+import com.archimond7450.archiemate.settings.{AppConfig, TwitchConfig, KickConfig}
 
 import java.time.Instant
 import scala.concurrent.duration.*
@@ -19,6 +19,7 @@ import scala.concurrent.ExecutionContext
 class AuthRoutes(
     appConfig: AppConfig,
     twitchOAuthActor: ActorRef[TwitchOAuthActor.Command],
+    kickOAuthActor: ActorRef[KickOAuthActor.Command],
     userTokenRegistry: ActorRef[UserTokenRegistry.Command],
     jwtActor: ActorRef[JwtActor.Command],
     classicActorSystem: org.apache.pekko.actor.ActorSystem
@@ -28,6 +29,10 @@ class AuthRoutes(
 
   private def buildRedirectUri(): String = {
     appConfig.callbackBaseUrl + appConfig.twitch.callbackPath
+  }
+
+  private def buildRedirectUri(callbackPath: String): String = {
+    appConfig.callbackBaseUrl + callbackPath
   }
 
   private def isSecure: Boolean = {
@@ -153,6 +158,127 @@ class AuthRoutes(
                       redirect(s"$callbackPath?error=token_exchange_failed", StatusCodes.Found)
                     case scala.util.Failure(ex) =>
                       redirect(s"$callbackPath?error=token_exchange_failed", StatusCodes.Found)
+                  }
+                case _ =>
+                  complete(StatusCodes.BadRequest -> "Missing code or state parameter")
+              }
+            }
+          }
+        }
+      } ~
+      // Kick authentication routes
+      pathPrefix("kick") {
+        // GET /auth/kick/login
+        path("login") {
+          get {
+            given Scheduler = classicActorSystem.toTyped.scheduler
+            given Timeout = Timeout(appConfig.askTimeout)
+            given ExecutionContext = scala.concurrent.ExecutionContext.global
+
+            val redirectUri = buildRedirectUri(appConfig.kick.callbackPath)
+            onComplete(kickOAuthActor.ask[KickOAuthActor.StateGenerated](ref =>
+              KickOAuthActor.GenerateState(redirectUri, ref, scopes = appConfig.kick.scopes)
+            )) {
+              case scala.util.Success(KickOAuthActor.StateOk(_, authUrl)) =>
+                redirect(authUrl.toString, StatusCodes.Found)
+              case scala.util.Success(KickOAuthActor.StateError(msg)) =>
+                complete(StatusCodes.InternalServerError -> s"Failed to generate OAuth state: $msg")
+              case scala.util.Failure(ex) =>
+                complete(StatusCodes.InternalServerError -> s"OAuth state generation failed: ${ex.getMessage}")
+            }
+          }
+        } ~
+        // GET /auth/kick/authorize — redirect to Kick for chatbot authorization
+        path("authorize") {
+          get {
+            given Scheduler = classicActorSystem.toTyped.scheduler
+            given Timeout = Timeout(appConfig.askTimeout)
+            given ExecutionContext = scala.concurrent.ExecutionContext.global
+
+            val redirectUri = buildRedirectUri(appConfig.kick.callbackPath)
+            onComplete(kickOAuthActor.ask[KickOAuthActor.AuthorizeStateGenerated](ref =>
+              KickOAuthActor.GenerateAuthorizeState(redirectUri, ref)
+            )) {
+              case scala.util.Success(KickOAuthActor.AuthorizeStateOk(_, authUrl)) =>
+                redirect(authUrl.toString, StatusCodes.Found)
+              case scala.util.Failure(ex) =>
+                complete(StatusCodes.InternalServerError -> s"OAuth state generation failed: ${ex.getMessage}")
+            }
+          }
+        } ~
+        // GET /auth/kick/callback
+        path("callback") {
+          get {
+            extractRequest { request =>
+              val code = request.uri.query().get("code")
+              val state = request.uri.query().get("state")
+
+              (code, state) match {
+                case (Some(code), Some(state)) =>
+                  given Scheduler = classicActorSystem.toTyped.scheduler
+                  given Timeout = Timeout(appConfig.askTimeout)
+                  given ExecutionContext = scala.concurrent.ExecutionContext.global
+
+                  onComplete(kickOAuthActor.ask[KickOAuthActor.TokenExchangeResponse](ref =>
+                    KickOAuthActor.ExchangeCode(state, ref)
+                  )) {
+                    case scala.util.Success(KickOAuthActor.TokenExchangeSuccess(accessToken, refreshToken, expiresIn, platformUserId, username, profileImage, flow)) =>
+                      val expiresAt = Instant.now().plusSeconds(expiresIn)
+                      onComplete(
+                        userTokenRegistry.ask[UserTokenRegistry.ConnectionResponse](ref =>
+                          UserTokenRegistry.RegisterPlatformConnection(
+                            platformUserId,
+                            "kick",
+                            platformUserId,
+                            accessToken,
+                            refreshToken,
+                            expiresAt,
+                            ref
+                          )
+                        )
+                      ) {
+                        case scala.util.Success(UserTokenRegistry.ConnectionRegistered(_, _)) =>
+                          flow match {
+                            case "login" =>
+                              onComplete(
+                                jwtActor.ask[JwtActor.EncodeResponse](ref =>
+                                  JwtActor.Encode(platformUserId, ref)
+                                )
+                              ) { jwtResult =>
+                                jwtResult match {
+                                  case scala.util.Success(JwtActor.EncodeSuccess(jwtToken)) =>
+                                    val cookie = org.apache.pekko.http.scaladsl.model.headers.HttpCookie(
+                                      "archiemate_jwt",
+                                      jwtToken,
+                                      httpOnly = true,
+                                      secure = isSecure,
+                                      maxAge = Some(appConfig.jwt.tokenLifetimeMinutes.toLong * 60)
+                                    )
+                                    setCookie(cookie) {
+                                      redirect(appConfig.kick.callbackPath, StatusCodes.Found)
+                                    }
+                                  case scala.util.Success(JwtActor.Error(msg)) =>
+                                    redirect(s"${appConfig.kick.callbackPath}?error=jwt_failed", StatusCodes.Found)
+                                  case scala.util.Failure(ex) =>
+                                    redirect(s"${appConfig.kick.callbackPath}?error=jwt_failed", StatusCodes.Found)
+                                }
+                              }
+                            case "authorize" =>
+                              redirect("/dashboard", StatusCodes.Found)
+                            case _ =>
+                              redirect(appConfig.kick.callbackPath, StatusCodes.Found)
+                          }
+                        case scala.util.Success(UserTokenRegistry.Error(msg)) =>
+                          redirect(s"${appConfig.kick.callbackPath}?error=token_store_failed", StatusCodes.Found)
+                        case scala.util.Success(other) =>
+                          redirect(s"${appConfig.kick.callbackPath}?error=unexpected_response", StatusCodes.Found)
+                        case scala.util.Failure(ex) =>
+                          redirect(s"${appConfig.kick.callbackPath}?error=token_store_failed", StatusCodes.Found)
+                      }
+                    case scala.util.Success(KickOAuthActor.TokenExchangeError(msg)) =>
+                      redirect(s"${appConfig.kick.callbackPath}?error=token_exchange_failed", StatusCodes.Found)
+                    case scala.util.Failure(ex) =>
+                      redirect(s"${appConfig.kick.callbackPath}?error=token_exchange_failed", StatusCodes.Found)
                   }
                 case _ =>
                   complete(StatusCodes.BadRequest -> "Missing code or state parameter")
