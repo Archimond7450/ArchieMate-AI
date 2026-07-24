@@ -220,11 +220,108 @@ This file tracks the development progress of ArchieMate. The AI agent should ref
 ## TODO
 
 ### Phase 17: Chatbot Features
-- [ ] Command system (`!command` syntax)
-- [ ] Message filtering
-- [ ] User moderation
-- [ ] Custom responses
-- [ ] Statistics and analytics
+
+> **Note:** This is a comprehensive feature set. The spec below captures the current requirements and will be refined further as implementation progresses.
+
+#### 17.1: Command Framework
+- [ ] Command parser — tokenize messages, strip `!` prefix, extract arguments
+- [ ] Command routing — dispatch to registered handlers
+- [ ] Per-channel command support (Twitch, Kick, YouTube)
+- [ ] Configurable enable/disable for all built-in commands
+- [ ] Built-in variable expansion in command responses (`${var}`, `$channelVar`)
+- [ ] Channel variable support (`$variable`) — set/unset by broadcaster/moderator
+- [ ] Custom command system — add/edit/delete/rename custom commands
+- [ ] Alias system — tie multiple commands to a single name
+- [ ] Command documentation on Docs page with copy-ready examples
+
+#### 17.2: Stream Info Commands
+- [ ] `!game` — return current stream game on the issuing platform
+- [ ] `!game xxxx` — change game on ALL connected platforms (broadcaster/moderator only)
+- [ ] `!title` — return current stream title on the issuing platform
+- [ ] `!title xxxx` — change title on ALL connected platforms (broadcaster/moderator only)
+- [ ] `!subs` — return subscriber count on the issuing platform
+- [ ] `!uptime` — return stream uptime or "stream not up" message
+- [ ] `!followage` — return issuer's follow duration (platform-dependent)
+- [ ] `!followage xxxx` — return specified user's follow duration (platform-dependent)
+
+#### 17.3: Greets System (`!greets`)
+- [ ] Configurable greet mode:
+  - `Mods` — greet mods only
+  - `ModsVips` — greet mods + VIPs
+  - `ModsVipsSubs` — greet mods + VIPs + subs
+  - `ModsVipsSubsFollows` — greet mods + VIPs + subs + followers
+  - `All` — greet everyone except known chatbot users
+  - `None` — disabled
+- [ ] Kick/YouTube: greet only on first message in stream (no join-tracking)
+- [ ] Track standard greets (channel-wide) and specific greets (per-user)
+- [ ] `${user}` variable expansion in greet messages
+- [ ] `!greets mode xxxx` — change greet mode
+- [ ] `!greets show` / `!greets list` — list greets (standard if broadcaster, specific if issuer)
+- [ ] `!greets add xxxx` / `!greets create xxxx` — add standard or specific greet
+- [ ] `!greets edit x yyyy` — edit greet at position x (first/second/third/last, 0-based, negative 1-based from end, or 1st/2nd/3rd ordinal)
+- [ ] `!greets edit/update/change xxx yyyy` — same as edit with ordinal positions
+- [ ] `!greets delete x` / `!greets remove x` — delete greet at position x
+- [ ] `!greets reset` — reset to defaults (mode None, delete all specific greets, add default greeting)
+- [ ] `!greets test` — broadcaster greets themselves with random standard greet; greetable user greets with random specific greet
+
+#### 17.4: Poll System (`!poll`)
+- [ ] Twitch-only for now (platform support check)
+- [ ] `!poll add alias "question" "option1" "option2" ...` — save poll with random UUID
+- [ ] `!poll alias currentAlias anotherAlias1 ...` — add aliases to existing poll
+- [ ] `!poll edit alias ...` — edit poll question/options (same param format as add)
+- [ ] `!poll update/change` — same as edit
+- [ ] `!poll delete alias` / `!poll remove alias` — delete poll
+- [ ] `!poll quick "Question" "option1" ... durationSeconds` — start unsaved poll
+- [ ] `!poll start alias durationSeconds` — start saved poll
+- [ ] `!poll end` / `!poll terminate` — end current Twitch poll
+- [ ] `!poll archive` — end + set status to ARCHIVED
+
+#### 17.5: Prediction System (`!prediction`)
+- [ ] Similar to poll system with prediction-specific semantics
+- [ ] `!prediction add/create alias "title" "outcome1" "outcome2" ...` — create prediction
+- [ ] `!prediction alias currentAlias anotherAlias1 ...` — add aliases
+- [ ] `!prediction edit alias "new title" "new outcome1" ...` — edit prediction
+- [ ] `!prediction update/change` — same as edit
+- [ ] `!prediction delete alias` / `!prediction remove alias` — delete prediction
+- [ ] `!prediction quick "Title" "outcome1" ... predictionWindowInSeconds` — start unsaved prediction
+- [ ] `!prediction start alias predictionWindowInSeconds` — start saved prediction
+- [ ] `!prediction cancel` — cancel current prediction
+- [ ] `!prediction lock` — immediately lock current prediction
+- [ ] `!prediction resolve x` — resolve by 0-based outcome index
+- [ ] `!prediction resolve xxx` — resolve by outcome text (warn if ambiguous)
+
+#### 17.6: AFK System (`!afk`)
+- [ ] Mark user as AFK when stream is up
+- [ ] Remember message IDs mentioning AFK user
+- [ ] Welcome back + reply to remembered messages when user types again
+- [ ] Clear all AFK state on stream end
+- [ ] If no remembered messages, just welcome back
+
+#### 17.7: Channel Variables
+- [ ] `!set x yyyy` — set channel variable (broadcaster/moderator only)
+- [ ] `!unset x` — unset channel variable (broadcaster/moderator only)
+- [ ] `$variable` expansion in command responses
+
+#### 17.8: Built-in Variables
+- [ ] `${time}` — current time (configurable format + zone)
+  - Examples: `${time}` | `${time:zone=GMT-6}` | `${time:format="YYYY-MM-DD HH:mm:ss"}`
+- [ ] `${chatters}` — list of chatters before command (configurable separator)
+  - Examples: `${chatters}` | `${chatters:separator=", "}`
+- [ ] `${sender}` — command issuer display name (configurable `:notag` flag)
+  - Examples: `${sender}` | `${sender:notag}`
+- [ ] `${random}` — random number (configurable `from`/`to` parameters)
+  - Examples: `${random}` | `${random:to=1000}` | `${random:from=1,to=6}`
+
+#### 17.9: Misc Commands
+- [ ] `!commands` — return URL to channel commands page
+- [ ] `!command add/create/new x yyyy` — create custom command
+- [ ] `!command edit/change/update x yyyy` — edit custom command
+- [ ] `!command rename x y` — rename custom command
+- [ ] `!command delete/remove x` — delete custom command
+- [ ] `!alias add/create/new x "cmd1" "cmd2" ...` — create alias
+- [ ] `!alias edit/update/change x "cmd1" "cmd2" ...` — edit alias
+- [ ] `!alias rename x y` — rename alias
+- [ ] `!alias delete/remove x` — delete alias
 
 ### Phase 18: Frontend Pages
 - [ ] Settings page
